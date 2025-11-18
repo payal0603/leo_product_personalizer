@@ -1,0 +1,16 @@
+#personalization_canvas {
+    border: 2px dashed #ccc;
+    background-color: #f9f9f9;
+    width: 800px !important;
+    height: 800px !important;
+}
+
+.personalization-boundary {
+    border: 2px solid green;
+    position: absolute;
+    box-sizing: border-box;
+}
+
+.modal-xl {
+    max-width: 90%;
+}

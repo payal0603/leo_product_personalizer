@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_template_form_view_personalization" model="ir.ui.view">
+        <field name="name">product.template.form.personalization</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Design Personalization">
+                    <group>
+                        <field name="design_config_ids" nolabel="1">
+                            <list>
+                                <field name="design_type"/>
+                                <field name="label"/>
+                                <field name="is_restricted_area"/>
+                                <field name="bound_x"/>
+                                <field name="bound_y"/>
+                                <field name="bound_width"/>
+                                <field name="bound_height"/>
+                            </list>
+                            <form>
+                                <sheet>
+                                    <group>
+                                        <field name="design_type"/>
+                                        <field name="label"/>
+                                        <field name="design_image" filename="design_image_name" widget="image"/>
+                                        <field name="is_restricted_area"/>
+                                    </group>
+                                    <group invisible="not is_restricted_area">
+                                        <field name="bound_x"/>
+                                        <field name="bound_y"/>
+                                        <field name="bound_width"/>
+                                        <field name="bound_height"/>
+                                    </group>
+                                </sheet>
+                            </form>
+                        </field>
+                    </group>
+                </page>
+            </xpath>
+            <xpath expr="//div[@name='options']" position="inside">
+                <span class="d-inline-flex" invisible="type == 'combo'">
+                    <field name="is_product_personalization" on_change="1"/>
+                    <label for="is_product_personalization"/>
+                </span>
+            </xpath>
+        </field>
+    </record>
+</odoo>

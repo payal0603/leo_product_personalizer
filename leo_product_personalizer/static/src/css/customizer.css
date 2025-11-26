@@ -14,3 +14,20 @@
 .modal-xl {
     max-width: 90%;
 }
+
+.menu-item:hover {
+    background-color: #4a5568 !important;
+    color: white !important;
+}
+
+.menu-item.active {
+    background-color: #4a5568 !important;
+    color: white !important;
+}
+
+.menu-panel {
+    animation: fadeIn 0.3s;
+} @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

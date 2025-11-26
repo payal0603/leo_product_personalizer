@@ -17,20 +17,36 @@ class ProductDesignConfig(models.Model):
     # 3. FIELD DECLARATIONS
     # ------------------------------------------------------------------
 
+    product_variant_id = fields.Many2one(
+        "product.product",
+        string="Product Variant",
+        help="Leave empty to apply to all variants",
+        required=True,
+        ondelete="cascade",
+    )
     product_tmpl_id = fields.Many2one(
-        'product.template', string='Product Template', required=True, ondelete='cascade', index=True
+        "product.template",
+        related="product_variant_id.product_tmpl_id",
+        store=True,
+        readonly=True,
     )
 
-    design_type = fields.Char(string='Design Type', required=True, help="Identifier for the design side (e.g. front, back)")
-    label = fields.Char(string='Label', help="Friendly label shown in selector")
-    design_image = fields.Binary('Side Image', attachment=True)
-    design_image_name = fields.Char('Image Filename')
+    design_type = fields.Char(
+        string="Design Type",
+        required=True,
+        help="Identifier for the design side (e.g. front, back)",
+    )
+    label = fields.Char(string="Label", help="Friendly label shown in selector")
+    design_image = fields.Image("Side Image")
 
-    is_restricted_area = fields.Boolean('Has Restricted Area', help='When checked, user edits will be clamped inside the rectangle below.')
-    bound_x = fields.Float('Bound X (px)')
-    bound_y = fields.Float('Bound Y (px)')
-    bound_width = fields.Float('Bound Width (px)')
-    bound_height = fields.Float('Bound Height (px)')
+    is_restricted_area = fields.Boolean(
+        "Has Restricted Area",
+        help="When checked, user edits will be clamped inside the rectangle below.",
+    )
+    bound_x = fields.Float("Bound X (px)")
+    bound_y = fields.Float("Bound Y (px)")
+    bound_width = fields.Float("Bound Width (px)")
+    bound_height = fields.Float("Bound Height (px)")
 
     # ------------------------------------------------------------------
     # 4. COMPUTE, INVERSE AND SEARCH METHODS

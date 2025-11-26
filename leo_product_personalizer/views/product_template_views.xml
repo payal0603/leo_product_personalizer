@@ -5,8 +5,22 @@
         <field name="model">product.template</field>
         <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
+            <xpath expr="//div[@name='options']" position="inside">
+                <span class="d-inline-flex" invisible="type == 'combo'">
+                    <field name="is_product_personalization" on_change="1"/>
+                    <label for="is_product_personalization"/>
+                </span>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_normal_form_view_personalization" model="ir.ui.view">
+        <field name="name">product.product.form.personalization</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_normal_form_view"/>
+        <field name="arch" type="xml">
             <xpath expr="//notebook" position="inside">
-                <page string="Design Personalization">
+                <page string="Design Personalization" invisible="not is_product_personalization">
                     <group>
                         <field name="design_config_ids" nolabel="1">
                             <list>
@@ -22,15 +36,15 @@
                                 <sheet>
                                     <group>
                                         <field name="design_type"/>
-                                        <field name="label"/>
-                                        <field name="design_image" filename="design_image_name" widget="image"/>
-                                        <field name="is_restricted_area"/>
+                                        <field name="label" />
+                                        <div name="design_configurator_container" widget="design_configurator" class="o_field_image"/>
+                                        <field name="is_restricted_area" />
                                     </group>
                                     <group invisible="not is_restricted_area">
                                         <field name="bound_x"/>
                                         <field name="bound_y"/>
-                                        <field name="bound_width"/>
-                                        <field name="bound_height"/>
+                                        <field name="bound_width" />
+                                        <field name="bound_height" />
                                     </group>
                                 </sheet>
                             </form>
@@ -38,12 +52,7 @@
                     </group>
                 </page>
             </xpath>
-            <xpath expr="//div[@name='options']" position="inside">
-                <span class="d-inline-flex" invisible="type == 'combo'">
-                    <field name="is_product_personalization" on_change="1"/>
-                    <label for="is_product_personalization"/>
-                </span>
-            </xpath>
         </field>
     </record>
+
 </odoo>

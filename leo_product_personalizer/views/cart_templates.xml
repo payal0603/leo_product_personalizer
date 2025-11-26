@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add personalization buttons to cart lines -->
+    <template id="cart_line_personalization_buttons" inherit_id="website_sale.cart_lines" name="Cart Line Personalization Buttons">
+        <xpath expr="//a[hasclass('js_delete_product')]" position="before">
+            <div t-if="line.personalization_ids" class="d-flex gap-2 ms-2">
+                <!-- Edit Design Button -->
+                <a href="#" 
+                    class="btn btn-sm btn-warning edit-design-btn" 
+                    t-att-data-line-id="line.id"
+                    title="Edit the custom design">
+                    <i class="fa fa-edit"/> Edit Design
+                </a>
+                
+                <!-- Preview Design Button -->
+                <a href="#" 
+                    class="btn btn-sm btn-info preview-design-btn" 
+                    t-att-data-line-id="line.id"
+                    title="Preview the custom design">
+                    <i class="fa fa-eye"/> Preview
+                </a>
+            </div>
+        </xpath>
+    </template>
+
+    <!-- Cart Personalization Preview Modal -->
+    <template id="cart_preview_modal" inherit_id="website_sale.cart" name="Cart Preview Modal">
+        <xpath expr="//div[@id='shop_cart']" position="inside">
+            <div class="modal fade" id="preview_personalization_modal" tabindex="-1" role="dialog" aria-labelledby="previewLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Design Preview</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                        </div>
+                        <div class="modal-body">
+                            <div class="container-fluid">
+                                <div class="row" id="preview_grid">
+                                    <div class="col-12 col-md-6 mb-3 preview-item">
+                                        <div class="card h-100">
+                                            <div class="card-body d-flex flex-column">
+                                                <strong class="card-title design-title mb-2"/>
+                                                <div class="flex-fill d-flex align-items-center justify-content-center">
+                                                    <img class="img-fluid rounded" style="max-height:260px; width:100%; object-fit:contain;" alt="Design"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-md-6 mb-3 preview-item">
+                                        <div class="card h-100">
+                                            <div class="card-body d-flex flex-column">
+                                                <strong class="card-title design-title mb-2"/>
+                                                <div class="flex-fill d-flex align-items-center justify-content-center">
+                                                    <img class="img-fluid rounded" style="max-height:260px; width:100%; object-fit:contain;" alt="Design"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </xpath>
+    </template>
+</odoo>

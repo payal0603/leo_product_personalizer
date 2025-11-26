@@ -1,12 +1,12 @@
 from odoo import fields, models
 
 
-class ProductTemplate(models.Model):
+class ProductProduct(models.Model):
     # ------------------------------------------------------------------
     # 1. PRIVATE ATTRIBUTES
     # ------------------------------------------------------------------
 
-    _inherit = "product.template"
+    _inherit = "product.product"
 
     # ------------------------------------------------------------------
     # 2. DEFAULT METHODS AND default_get
@@ -16,9 +16,10 @@ class ProductTemplate(models.Model):
     # 3. FIELD DECLARATIONS
     # ------------------------------------------------------------------
 
-    is_product_personalization = fields.Boolean(
-        string="Is Product Personalization",
-        help="Enables personalization features for this product.",
+    design_config_ids = fields.One2many(
+        "product.design.config",
+        "product_variant_id",
+        string="Design Configurations",
     )
 
     # ------------------------------------------------------------------

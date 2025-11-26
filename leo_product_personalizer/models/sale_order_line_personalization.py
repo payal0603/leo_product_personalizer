@@ -18,16 +18,25 @@ class SaleOrderLinePersonalization(models.Model):
     # ------------------------------------------------------------------
 
     sale_order_line_id = fields.Many2one(
-        'sale.order.line', string='Sale Order Line', required=True, ondelete='cascade', index=True
+        "sale.order.line",
+        string="Sale Order Line",
+        required=True,
+        ondelete="cascade",
+        index=True,
     )
-    order_id = fields.Many2one(related='sale_order_line_id.order_id', store=True)
-    design_type = fields.Char(string='Design Type', required=True,
-        help='Identifier of the side/area (e.g. front, back)')
-    design_config_id = fields.Many2one('product.design.config', string='Design Config')
-    fabric_json = fields.Text('Fabric JSON')
-    preview = fields.Binary('Preview Image', attachment=True)
-    final_image = fields.Binary('Final Rendered Image', attachment=True)
-    
+    order_id = fields.Many2one(related="sale_order_line_id.order_id", store=True)
+    design_type = fields.Char(
+        string="Design Type",
+        required=True,
+        help="Identifier of the side/area (e.g. front, back)",
+    )
+    design_title = fields.Char(string="Design Title")
+    design_config_id = fields.Many2one(
+        "product.design.config", string="Design Config"
+    )
+    personalized_json = fields.Text("Fabric JSON")
+    product_image = fields.Image("Preview Image", store=True)
+
     # ------------------------------------------------------------------
     # 4. COMPUTE, INVERSE AND SEARCH METHODS
     # ------------------------------------------------------------------
@@ -51,13 +60,3 @@ class SaleOrderLinePersonalization(models.Model):
     # ------------------------------------------------------------------
     # 9. BUSINESS METHODS
     # ------------------------------------------------------------------
-
-    def get_image_url(self):
-        """
-        Return a web/image URL to this design_image.
-        """
-        self.ensure_one()
-        if not self.design_image:
-            return False
-        fname = self.design_image_name or 'design_%s.png' % (self.id,)
-        return '/web/image/product.design.config/%s/design_image/%s' % (self.id, fname)

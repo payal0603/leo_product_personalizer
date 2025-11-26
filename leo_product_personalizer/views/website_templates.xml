@@ -14,235 +14,250 @@
     <!-- Personalization page -->
     <template id="product_personalization_page" name="Product Personalization Page">
         <t t-call="website.layout">
-            <div id="wrap" class="o_product_personalize_page" t-att-data-product-id="product.id">
+            <div id="wrap" class="o_product_personalize_page" t-att-data-product-id="product.id" style="position: relative;">
+                <div style="position: absolute; top: 20px; right: 10px; z-index: 1050;
+                    display: flex; flex-direction: column; gap: 8px;">                                    
+                    <button type="button" id="add_to_cart_personalized"
+                        class="btn btn-primary d-flex align-items-center"
+                        style="height: 48px;">
+                        <i class="fa fa-shopping-cart" style="margin-right:5px;" ></i> Add to Cart
+                    </button>
+                    <a t-attf-href="/shop/product/#{product.id}"
+                        class="btn btn-outline-secondary d-flex align-items-center"
+                        style="height: 48px;">
+                        <i class="fa fa-times" style="margin-right:5px;" ></i> Cancel
+                    </a>
+                </div>
+
                 <div class="container-fluid mt-4">
                     <div class="row">
                         <!-- Sidebar -->
-                        <div class="col-lg-3" style="background-color: #f8f9fa; padding: 20px; min-height: calc(100vh - 100px); overflow-y: auto;">
-                            <!-- Dynamic Design Side Selector -->
-                            <div class="form-group mb-4">
-                                <label><strong>Select Design Side</strong></label>
-                                <select id="design_type_selector"
-                                        class="form-control form-control-sm">
-                                    <!-- JS will add all design_config.design_type options -->
-                                    <option value="">Select Area</option>
-                                </select>
-                            </div>
-
-                            <!-- Undo/Redo/Delete Buttons -->
-                            <div class="form-group mb-3">
-                                <div class="btn-group w-100" role="group">
-                                    <button id="undo_button" class="btn btn-outline-secondary btn-sm" title="Undo (Ctrl+Z)">
-                                        <i class="fa fa-undo"/>
-                                    </button>
-                                    <button id="redo_button" class="btn btn-outline-secondary btn-sm" title="Redo (Ctrl+Y)">
-                                        <i class="fa fa-repeat"/>
-                                    </button>
-                                    <button id="delete_button" class="btn btn-outline-danger btn-sm" title="Delete (Del)">
-                                        <i class="fa fa-trash"/>
-                                    </button>
+                        <div class="col-lg-3" style="display: flex; background-color: #f8f9fa; min-height: calc(100vh - 100px); padding: 0;">
+                            <!-- Left Menu Bar -->
+                            <div style="width: 80px; background-color: #2d3748; display: flex; flex-direction: column; align-items: center; padding-top: 20px;">
+                                <div class="menu-item active" data-menu="variant" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; background-color: #4a5568; color: white;">
+                                    <i class="fa fa-cube" style="font-size: 24px;"/>
+                                    <span style="font-size: 10px; margin-top: 4px;">Variant</span>
+                                </div>
+                                <div class="menu-item" data-menu="design" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
+                                    <i class="fa fa-layer-group" style="font-size: 24px;"/>
+                                    <span style="font-size: 10px; margin-top: 4px;">Design</span>
+                                </div>
+                                <div class="menu-item" data-menu="text" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
+                                    <i class="fa fa-font" style="font-size: 24px;"/>
+                                    <span style="font-size: 10px; margin-top: 4px;">Text</span>
+                                </div>
+                                <div class="menu-item" data-menu="image" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
+                                    <i class="fa fa-image" style="font-size: 24px;"/>
+                                    <span style="font-size: 10px; margin-top: 4px;">Image</span>
+                                </div>
+                                <div class="menu-item" data-menu="shape" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
+                                    <i class="fas" style="font-size: 24px;">&#xf61f;</i>
+                                    <span style="font-size: 10px; margin-top: 4px;">Shapes</span>
+                                </div>
+                                <div class="menu-item" data-menu="layers" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
+                                    <i class="fas fa-list" style="font-size: 24px;" />
+                                    <span style="font-size: 10px; margin-top: 4px;">Layers</span>
                                 </div>
                             </div>
-                            <hr/>
 
-                            <!-- Text Tool -->
-                            <div class="mb-4">
-                                <h6 class="mb-2">
-                                    <i class="fa fa-font"/> Text</h6>
-                                <div class="form-group mb-2">
-                                    <input type="text" id="personalization_text" class="form-control form-control-sm" placeholder="Enter your text"/>
+                            <!-- Right Panel Content -->
+                            <div style="flex: 1; padding: 20px; overflow-y: auto; position: relative;">
+                                <div style="position: sticky; top: 20px; z-index: 50; background: transparent; padding-bottom: 12px;">
+                                    <div class="btn-group w-100 mb-3" role="group" style="display: flex; gap:6px;">
+                                        <button id="undo_button" class="btn btn-outline-secondary btn-sm" title="Undo (Ctrl+Z)">
+                                            <i class="fa fa-undo"/>
+                                        </button>
+                                        <button id="redo_button" class="btn btn-outline-secondary btn-sm" title="Redo (Ctrl+Y)">
+                                            <i class="fa fa-repeat"/>
+                                        </button>
+                                    </div>
                                 </div>
-                                <button id="add_text_button" class="btn btn-primary btn-sm w-100 mb-3">
-                                    <i class="fa fa-plus"/> Add Text
-                                </button>
 
-                                <!-- Text Controls (shown when text is selected) -->
-                                <div id="text_controls" style="display: none;">
-                                    <div class="form-group mb-2">
-                                        <label class="small">Font Family</label>
-                                        <select id="text_font_family" class="form-control form-control-sm">
-                                            <option value="Arial">Arial</option>
-                                            <option value="Helvetica">Helvetica</option>
-                                            <option value="Times New Roman">Times New Roman</option>
-                                            <option value="Courier New">Courier New</option>
-                                            <option value="Verdana">Verdana</option>
-                                            <option value="Georgia">Georgia</option>
-                                            <option value="Palatino">Palatino</option>
-                                            <option value="Garamond">Garamond</option>
-                                            <option value="Comic Sans MS">Comic Sans MS</option>
-                                            <option value="Trebuchet MS">Trebuchet MS</option>
-                                            <option value="Impact">Impact</option>
-                                            <option value="Lucida Console">Lucida Console</option>
-                                            <option value="Tahoma">Tahoma</option>
-                                            <option value="Century Gothic">Century Gothic</option>
-                                            <option value="Brush Script MT">Brush Script MT</option>
-                                            <option value="Copperplate">Copperplate</option>
-                                            <option value="Papyrus">Papyrus</option>
-                                            <option value="Rockwell">Rockwell</option>
-                                            <option value="Consolas">Consolas</option>
-                                            <option value="Monaco">Monaco</option>
+                                <!-- Variant Panel -->
+                                <div id="variant_panel" class="menu-panel">
+                                    <h5 class="mb-3">Select Variant</h5>
+                                    <div class="form-group mb-3">
+                                        <select id="variant_selector" class="form-control">
+                                            <!-- options populated by JS -->
+                                            <option value="">Select Variant</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Design Side Panel -->
+                                <div id="design_panel" class="menu-panel" style="display: none; margin-top: 10px;">
+                                    <h5 class="mb-3">Design Side</h5>
+                                    <div class="form-group mb-3">
+                                        <label><strong>Select Design Side</strong></label>
+                                        <select id="design_type_selector" class="form-control mb-3">
+                                            <option value="">Select Area</option>
                                         </select>
                                     </div>
 
-                                    <div class="row mb-2">
-                                        <div class="col-6">
-                                            <label class="small">Size</label>
-                                            <input type="number" id="text_font_size" class="form-control form-control-sm" min="8" max="200" value="40"/>
-                                        </div>
-                                        <div class="col-6">
-                                            <label class="small">Color</label>
-                                            <input type="color" id="text_color" class="form-control form-control-sm" value="#000000"/>
-                                        </div>
-                                    </div>
-
-                                    <div class="btn-group w-100 mb-2" role="group">
-                                        <button id="text_bold" class="btn btn-outline-secondary btn-sm" title="Bold">
-                                            <i class="fa fa-bold"/>
-                                        </button>
-                                        <button id="text_italic" class="btn btn-outline-secondary btn-sm" title="Italic">
-                                            <i class="fa fa-italic"/>
-                                        </button>
-                                        <button id="text_underline" class="btn btn-outline-secondary btn-sm" title="Underline">
-                                            <i class="fa fa-underline"/>
-                                        </button>
-                                    </div>
-
-                                    <!-- Preset Colors -->
-                                    <div class="mb-2">
-                                        <label class="small">Quick Colors</label>
-                                        <div class="d-flex flex-wrap">
-                                            <div class="preset-color" data-color="#000000" style="width: 30px; height: 30px; background: #000000; cursor: pointer; margin: 2px; border-radius: 4px;" title="Black"></div>
-                                            <div class="preset-color" data-color="#FFFFFF" style="width: 30px; height: 30px; background: #FFFFFF; cursor: pointer; margin: 2px; border: 1px solid #ddd; border-radius: 4px;" title="White"></div>
-                                            <div class="preset-color" data-color="#FF0000" style="width: 30px; height: 30px; background: #FF0000; cursor: pointer; margin: 2px; border-radius: 4px;" title="Red"></div>
-                                            <div class="preset-color" data-color="#00FF00" style="width: 30px; height: 30px; background: #00FF00; cursor: pointer; margin: 2px; border-radius: 4px;" title="Green"></div>
-                                            <div class="preset-color" data-color="#0000FF" style="width: 30px; height: 30px; background: #0000FF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Blue"></div>
-                                            <div class="preset-color" data-color="#FFFF00" style="width: 30px; height: 30px; background: #FFFF00; cursor: pointer; margin: 2px; border-radius: 4px;" title="Yellow"></div>
-                                            <div class="preset-color" data-color="#FF00FF" style="width: 30px; height: 30px; background: #FF00FF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Magenta"></div>
-                                            <div class="preset-color" data-color="#00FFFF" style="width: 30px; height: 30px; background: #00FFFF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Cyan"></div>
-                                            <div class="preset-color" data-color="#FFA500" style="width: 30px; height: 30px; background: #FFA500; cursor: pointer; margin: 2px; border-radius: 4px;" title="Orange"></div>
-                                            <div class="preset-color" data-color="#800080" style="width: 30px; height: 30px; background: #800080; cursor: pointer; margin: 2px; border-radius: 4px;" title="Purple"></div>
-                                            <div class="preset-color" data-color="#FFC0CB" style="width: 30px; height: 30px; background: #FFC0CB; cursor: pointer; margin: 2px; border-radius: 4px;" title="Pink"></div>
-                                            <div class="preset-color" data-color="#A52A2A" style="width: 30px; height: 30px; background: #A52A2A; cursor: pointer; margin: 2px; border-radius: 4px;" title="Brown"></div>
-                                        </div>
+                                    <div class="form-group mb-3">
+                                        <label><strong>Quantity</strong></label>
+                                        <input type="number" id="product_qty" class="form-control" min="1" value="1"/>
                                     </div>
                                 </div>
-                            </div>
 
-                            <hr/>
-
-                            <!-- Image Upload Tool -->
-                            <div class="mb-4">
-                                <h6 class="mb-2">
-                                    <i class="fa fa-image"/> Images</h6>
-                                <div class="form-group mb-2">
-                                    <input type="file" id="personalization_image_upload" class="form-control form-control-sm" accept="image/*" multiple="multiple"/>
-                                </div>
-                                <button id="add_image_button" class="btn btn-primary btn-sm w-100">
-                                    <i class="fa fa-plus"/> Add Image
-                                </button>
-                            </div>
-
-                            <hr/>
-
-                            <!-- Shape Tool -->
-                            <div class="mb-4">
-                                <h6 class="mb-2">
-                                    <i class="fa fa-shapes"/> Shapes</h6>
-                                <div class="form-group mb-2">
-                                    <select id="personalization_shape" class="form-control form-control-sm">
-                                        <option value="rect">Rectangle</option>
-                                        <option value="square">Square</option>
-                                        <option value="circle">Circle</option>
-                                        <option value="ellipse">Ellipse</option>
-                                        <option value="triangle">Triangle</option>
-                                        <option value="polygon">Pentagon</option>
-                                        <option value="hexagon">Hexagon</option>
-                                        <option value="star">Star</option>
-                                        <option value="heart">Heart</option>
-                                        <option value="diamond">Diamond</option>
-                                        <option value="arrow">Arrow</option>
-                                        <option value="line">Line</option>
-                                    </select>
-                                </div>
-                                <button id="add_shape_button" class="btn btn-primary btn-sm w-100 mb-3">
-                                    <i class="fa fa-plus"/> Add Shape
-                                </button>
-
-                                <!-- Shape Controls (shown when shape is selected) -->
-                                <div id="shape_controls" style="display: none;">
+                                <!-- Text Panel -->
+                                <div id="text_panel" class="menu-panel" style="display: none; margin-top: 10px;">
+                                    <h5 class="mb-3">Add Text</h5>
                                     <div class="form-group mb-2">
-                                        <label class="small">Fill Color</label>
-                                        <input type="color" id="shape_fill_color" class="form-control form-control-sm" value="#3b82f6"/>
+                                        <input type="text" id="personalization_text" class="form-control mb-2" placeholder="Enter text"/>
                                     </div>
+                                    <button id="add_text_button" class="btn btn-primary w-100 mb-3"><i class="fa fa-plus"/> Add Text</button>
+                                    
+                                    <div id="text_controls" style="display: none;">
+                                        <div class="form-group mb-2">
+                                            <label class="small">Font Family</label>
+                                            <select id="text_font_family" class="form-control">
+                                                <option value="Arial">Arial</option>
+                                                <option value="Helvetica">Helvetica</option>
+                                                <option value="Times New Roman">Times New Roman</option>
+                                                <option value="Courier New">Courier New</option>
+                                                <option value="Verdana">Verdana</option>
+                                                <option value="Georgia">Georgia</option>
+                                                <option value="Palatino">Palatino</option>
+                                                <option value="Garamond">Garamond</option>
+                                                <option value="Comic Sans MS">Comic Sans MS</option>
+                                                <option value="Trebuchet MS">Trebuchet MS</option>
+                                                <option value="Impact">Impact</option>
+                                                <option value="Lucida Console">Lucida Console</option>
+                                                <option value="Tahoma">Tahoma</option>
+                                                <option value="Century Gothic">Century Gothic</option>
+                                                <option value="Brush Script MT">Brush Script MT</option>
+                                                <option value="Copperplate">Copperplate</option>
+                                                <option value="Papyrus">Papyrus</option>
+                                                <option value="Rockwell">Rockwell</option>
+                                                <option value="Consolas">Consolas</option>
+                                                <option value="Monaco">Monaco</option>
+                                            </select>
+                                        </div>
 
-                                    <div class="form-group mb-2">
-                                        <label class="small">Border Color</label>
-                                        <input type="color" id="shape_stroke_color" class="form-control form-control-sm" value="#1e40af"/>
-                                    </div>
+                                        <div class="row mb-2">
+                                            <div class="col-6">
+                                                <label class="small">Size</label>
+                                                <input type="number" id="text_font_size" class="form-control" min="8" max="200" value="40"/>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="small">Color</label>
+                                                <input type="color" id="text_color" class="form-control" value="#000000"/>
+                                            </div>
+                                        </div>
 
-                                    <div class="form-group mb-2">
-                                        <label class="small">Border Width</label>
-                                        <input type="number" id="shape_stroke_width" class="form-control form-control-sm" min="0" max="20" value="2"/>
-                                    </div>
+                                        <div class="btn-group w-100 mb-2" role="group">
+                                            <button id="text_bold" class="btn btn-outline-secondary btn-sm" title="Bold">
+                                                <i class="fa fa-bold"/>
+                                            </button>
+                                            <button id="text_italic" class="btn btn-outline-secondary btn-sm" title="Italic">
+                                                <i class="fa fa-italic"/>
+                                            </button>
+                                            <button id="text_underline" class="btn btn-outline-secondary btn-sm" title="Underline">
+                                                <i class="fa fa-underline"/>
+                                            </button>
+                                        </div>
 
-                                    <!-- Preset Colors for Shapes -->
-                                    <div class="mb-2">
-                                        <label class="small">Quick Colors</label>
-                                        <div class="d-flex flex-wrap">
-                                            <div class="preset-color" data-color="#3b82f6" style="width: 30px; height: 30px; background: #3b82f6; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
-                                            <div class="preset-color" data-color="#ef4444" style="width: 30px; height: 30px; background: #ef4444; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
-                                            <div class="preset-color" data-color="#10b981" style="width: 30px; height: 30px; background: #10b981; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
-                                            <div class="preset-color" data-color="#f59e0b" style="width: 30px; height: 30px; background: #f59e0b; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
-                                            <div class="preset-color" data-color="#8b5cf6" style="width: 30px; height: 30px; background: #8b5cf6; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
-                                            <div class="preset-color" data-color="#ec4899" style="width: 30px; height: 30px; background: #ec4899; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
+                                        <!-- Preset Colors -->
+                                        <div class="mb-2">
+                                            <label class="small">Quick Colors</label>
+                                            <div class="d-flex flex-wrap">
+                                                <div class="preset-color" data-color="#000000" style="width: 30px; height: 30px; background: #000000; cursor: pointer; margin: 2px; border-radius: 4px;" title="Black"></div>
+                                                <div class="preset-color" data-color="#FFFFFF" style="width: 30px; height: 30px; background: #FFFFFF; cursor: pointer; margin: 2px; border: 1px solid #ddd; border-radius: 4px;" title="White"></div>
+                                                <div class="preset-color" data-color="#FF0000" style="width: 30px; height: 30px; background: #FF0000; cursor: pointer; margin: 2px; border-radius: 4px;" title="Red"></div>
+                                                <div class="preset-color" data-color="#00FF00" style="width: 30px; height: 30px; background: #00FF00; cursor: pointer; margin: 2px; border-radius: 4px;" title="Green"></div>
+                                                <div class="preset-color" data-color="#0000FF" style="width: 30px; height: 30px; background: #0000FF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Blue"></div>
+                                                <div class="preset-color" data-color="#FFFF00" style="width: 30px; height: 30px; background: #FFFF00; cursor: pointer; margin: 2px; border-radius: 4px;" title="Yellow"></div>
+                                                <div class="preset-color" data-color="#FF00FF" style="width: 30px; height: 30px; background: #FF00FF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Magenta"></div>
+                                                <div class="preset-color" data-color="#00FFFF" style="width: 30px; height: 30px; background: #00FFFF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Cyan"></div>
+                                                <div class="preset-color" data-color="#FFA500" style="width: 30px; height: 30px; background: #FFA500; cursor: pointer; margin: 2px; border-radius: 4px;" title="Orange"></div>
+                                                <div class="preset-color" data-color="#800080" style="width: 30px; height: 30px; background: #800080; cursor: pointer; margin: 2px; border-radius: 4px;" title="Purple"></div>
+                                                <div class="preset-color" data-color="#FFC0CB" style="width: 30px; height: 30px; background: #FFC0CB; cursor: pointer; margin: 2px; border-radius: 4px;" title="Pink"></div>
+                                                <div class="preset-color" data-color="#A52A2A" style="width: 30px; height: 30px; background: #A52A2A; cursor: pointer; margin: 2px; border-radius: 4px;" title="Brown"></div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <hr/>
-
-                            <!-- Layer Controls (shown when any object is selected) -->
-                            <div id="layer_controls" style="display: none;" class="mb-4">
-                                <h6 class="mb-2">
-                                    <i class="fa fa-layer-group"/> Layers</h6>
-                                <div class="btn-group w-100" role="group">
-                                    <button id="bring_to_front" class="btn btn-outline-secondary btn-sm">
-                                        <i class="fa fa-arrow-up"/> Bring to Front
-                                    </button>
-                                    <button id="send_to_back" class="btn btn-outline-secondary btn-sm">
-                                        <i class="fa fa-arrow-down"/> Send to Back
-                                    </button>
-                                    <button id="duplicate_object" class="btn btn-outline-secondary btn-sm">
-                                        <i class="fa fa-copy"/> Duplicate (Ctrl+D)
-                                    </button>
-                                    <button id="lock_object" class="btn btn-outline-secondary btn-sm">
-                                        <i class="fa fa-lock"/> Lock/Unlock
-                                    </button>
+                                <!-- Image Panel -->
+                                <div id="image_panel" class="menu-panel" style="display: none; margin-top: 10px;">
+                                    <h5 class="mb-3">Add Image</h5>
+                                    <div class="form-group mb-2">
+                                        <input type="file" id="personalization_image_upload" class="form-control mb-2" accept="image/*" multiple="multiple"/>
+                                    </div>
+                                    <button id="add_image_button" class="btn btn-primary w-100"><i class="fa fa-plus"/> Add Image</button>
                                 </div>
-                                <hr/>
-                            </div>
 
-                            <!-- Action Buttons -->
-                            <div class="btn-group w-100 mt-2" role="group">
-                                <button type="button" id="add_to_cart_personalized" class="btn btn-primary mb-2 d-flex justify-content-center align-items-center" 
-                                    style="height: 50px; flex: 1;">
-                                    <i class="fa fa-shopping-cart" /> Add to Cart
-                                </button>
-                                <a t-attf-href="/shop/product/#{product.id}" class="btn btn-outline-secondary d-flex justify-content-center align-items-center" 
-                                    style="height: 50px; flex: 1; margin-left: 5px;">
-                                    <i class="fa fa-times" /> Cancel
-                                </a>
+                                <!-- Shape Panel -->
+                                <div id="shape_panel" class="menu-panel" style="display: none; margin-top: 10px;">
+                                    <h5 class="mb-3">Add Shape</h5>
+                                    <div class="form-group mb-2">
+                                        <select id="personalization_shape" class="form-control mb-2">
+                                            <option value="rect">Rectangle</option>
+                                            <option value="square">Square</option>
+                                            <option value="circle">Circle</option>
+                                            <option value="ellipse">Ellipse</option>
+                                            <option value="triangle">Triangle</option>
+                                            <option value="polygon">Pentagon</option>
+                                            <option value="hexagon">Hexagon</option>
+                                            <option value="star">Star</option>
+                                            <option value="heart">Heart</option>
+                                            <option value="diamond">Diamond</option>
+                                            <option value="arrow">Arrow</option>
+                                            <option value="line">Line</option>
+                                        </select>
+                                    </div>
+                                    <button id="add_shape_button" class="btn btn-primary w-100 mb-3"><i class="fa fa-plus"/> Add Shape</button>
+
+                                    <div id="shape_controls" style="display: none;">
+                                        <div class="form-group mb-2">
+                                            <label class="small">Fill Color</label>
+                                            <input type="color" id="shape_fill_color" class="form-control" value="#3b82f6"/>
+                                        </div>
+
+                                        <div class="form-group mb-2">
+                                            <label class="small">Border Color</label>
+                                            <input type="color" id="shape_stroke_color" class="form-control" value="#1e40af"/>
+                                        </div>
+
+                                        <div class="form-group mb-2">
+                                            <label class="small">Border Width</label>
+                                            <input type="number" id="shape_stroke_width" class="form-control" min="0" max="20" value="2"/>
+                                        </div>
+
+                                        <div class="mb-2">
+                                            <label class="small">Quick Colors</label>
+                                            <div class="d-flex flex-wrap">
+                                                <div class="preset-color" data-color="#3b82f6" style="width: 30px; height: 30px; background: #3b82f6; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
+                                                <div class="preset-color" data-color="#ef4444" style="width: 30px; height: 30px; background: #ef4444; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
+                                                <div class="preset-color" data-color="#10b981" style="width: 30px; height: 30px; background: #10b981; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
+                                                <div class="preset-color" data-color="#f59e0b" style="width: 30px; height: 30px; background: #f59e0b; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
+                                                <div class="preset-color" data-color="#8b5cf6" style="width: 30px; height: 30px; background: #8b5cf6; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
+                                                <div class="preset-color" data-color="#ec4899" style="width: 30px; height: 30px; background: #ec4899; cursor: pointer; margin: 2px; border-radius: 4px;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Layers Panel (NEW) -->
+                                <div id="layers_panel" class="menu-panel" style="display: none; margin-top: 10px;">
+                                    <h5 class="mb-3">Layers</h5>
+                                    <div id="layers_list" style="max-height:420px; overflow:auto; margin-top:10px;">
+                                        <!-- Populated by JS -->
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Canvas Area -->
-                        <div class="col-lg-9 d-flex align-items-center justify-content-center" style="background-color: #e9ecef; min-height: calc(100vh - 100px);">
+                        <div class="col-lg-9 d-flex align-items-center justify-content-center" style="background-color: #e9ecef; min-height: calc(100vh - 100px); position: relative;">
                             <input type="hidden" id="product_id" t-att-value="product.id"/>
-                            <div id="canvas_wrapper" style="position: relative; width: 800px; height: 800px;">
-                            </div>
+                            <input type="hidden" id="edit_mode" t-att-value="'true' if edit_mode else 'false'"/>
+                            <input type="hidden" id="line_id" t-att-value="line_id if edit_mode else ''"/>
+                            <input type="hidden" id="edit_variant_id" t-att-value="variant_id if edit_mode else ''"/>
+                            <div id="canvas_wrapper"/>
                         </div>
-
                     </div>
                 </div>
             </div>

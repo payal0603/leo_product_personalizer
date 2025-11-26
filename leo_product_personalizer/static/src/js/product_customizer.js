@@ -25,188 +25,381 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         'click #add_to_cart_personalized': '_onClickAddToCartPersonalized',
         'click #undo_button': '_onClickUndo',
         'click #redo_button': '_onClickRedo',
-        'click #delete_button': '_onClickDelete',
         'change #text_font_family': '_onChangeTextProperty',
         'change #text_font_size': '_onChangeTextProperty',
         'change #text_color': '_onChangeTextProperty',
         'click #text_bold': '_onClickTextStyle',
         'click #text_italic': '_onClickTextStyle',
         'click #text_underline': '_onClickTextStyle',
-        'click #text_align_left': '_onClickTextAlign',
-        'click #text_align_center': '_onClickTextAlign',
-        'click #text_align_right': '_onClickTextAlign',
         'change #shape_fill_color': '_onChangeShapeProperty',
         'change #shape_stroke_color': '_onChangeShapeProperty',
         'change #shape_stroke_width': '_onChangeShapeProperty',
-        'click #bring_to_front': '_onClickLayerAction',
-        'click #send_to_back': '_onClickLayerAction',
-        'click #duplicate_object': '_onClickDuplicate',
-        'click #lock_object': '_onClickLock',
         'click .preset-color': '_onClickPresetColor',
-        // --- ADDED: design type selector change
         'change #design_type_selector': '_onDesignTypeChange',
+        'change #product_qty': '_onChangeQty',
+        'change #variant_selector': '_onVariantChange',
+        'click .menu-item': '_onMenuItemClick',
     },
 
     start: function () {
-        debugger
-        this.history = [];
-        this.historyStep = -1;
-        this.isUndoRedoAction = false;
-        // --- ADDED: multi-side state
-        this.designData = {};            // stores fabric JSON per design type
-        this.activeDesignType = null;    // current active side string
-        this.zone = null;                // {x,y,width,height} px or null
-        this.zoneRect = null;            // fabric.Rect instance for UI
-        this.productData = null;         // data from server
+        const self = this;
+        self.history = [];
+        self.historyStep = -1;
+        self.isUndoRedoAction = false;
+        self.designData = {};
+        self.activeDesignType = null;
+        self.activeVariantId = null;
+        self.zone = null;
+        self.zoneRect = null;
+        self.productData = null;
+        self.fabricCanvas = null;
+        self._layerCounter = 1;
+        self.editMode = false;
+        self.editLineId = null;
+        self.editVariantId = null;
 
-        return this._super.apply(this, arguments).then(async () => {
-            await this._loadProductData();        // populates this.productData
-            this._initializeCanvas();
-            this._setupEventListeners();
-            this._setupKeyboardShortcuts();
-            this._initDesignTypeSelector();      // create/populate selector and set default
+        return this._super.apply(this, arguments).then(function () {
+            // Check if we're in edit mode
+            self.editMode = self.$('#edit_mode').val() === 'true';
+            self.editLineId = parseInt(self.$('#line_id').val()) || null;
+            self.editVariantId = parseInt(self.$('#edit_variant_id').val()) || null;
+
+            return self._loadProductData().then(function () {
+                self._initializeCanvas();
+                if (self.editMode && self.editLineId) {
+                    return self._loadEditModeData();
+                }
+            }).then(function () {
+                self._setupEventListeners();
+                self._setupKeyboardShortcuts();
+                self._initDesignTypeSelector();
+            });
         });
     },
 
-    /**************************************************************************
-     * Canvas initialization & basic product loading (mostly unchanged)
-     **************************************************************************/
+
+
+    _loadEditModeData: function () {
+        const self = this;
+        return rpc('/shop/cart/get_line_personalization', {
+            line_id: self.editLineId
+        }).then(function (result) {
+            if (!result.success) {
+                console.error('Failed to load line personalization:', result.error);
+                return;
+            }
+
+            // Load the persisted design data from the cart line
+            if (result.designs) {
+                self.designData = result.designs;
+                Object.keys(self.designData).forEach(function (designType) {
+                    const design = self.designData[designType];
+                    if (design.json && typeof design.json === 'string') {
+                        design.json = JSON.parse(design.json);
+                    }
+                    if (design.product_image_url) {
+                        design.backgroundImageUrl = design.product_image_url;
+                    }
+                });
+            }
+        }).catch(function (error) {
+            console.error('Error loading edit mode data:', error);
+        });
+    },
 
     _initializeCanvas: function () {
         const wrapper = document.getElementById("canvas_wrapper");
-        if (!wrapper) return console.error("canvas_wrapper not found");
+        if (!wrapper) {
+            console.error("canvas_wrapper not found");
+            return;
+        }
 
         wrapper.innerHTML = "";
         const canvas = document.createElement("canvas");
         canvas.id = "personalization_canvas";
-        Object.assign(canvas, { width: 800, height: 800 });
-        Object.assign(canvas.style, { width: "800px", height: "800px", border: "2px solid #dee2e6" });
+        canvas.width = 800;
+        canvas.height = 800;
+        canvas.style.width = "800px";
+        canvas.style.height = "800px";
+        canvas.style.border = "2px solid #dee2e6";
         wrapper.appendChild(canvas);
 
         this.fabricCanvas = new fabric.Canvas("personalization_canvas");
-        // NOTE: background loaded via per-side loader
     },
 
     _setupEventListeners: function () {
-        this.fabricCanvas.on({
-            'selection:created': () => this._updateControls(),
-            'selection:updated': () => this._updateControls(),
-            'selection:cleared': () => this._hideControls(),
-            'object:added': (e) => { if (!this.isUndoRedoAction) this._saveState(); this._onObjectAdded(e && e.target); },
-            'object:modified': (e) => { if (!this.isUndoRedoAction) this._saveState(); this._clampObjectToZone(e && e.target); },
-            'object:removed': () => !this.isUndoRedoAction && this._saveState()
+        const self = this;
+
+        self.fabricCanvas.on('selection:created', function () {
+            self._updateControls();
+            self._renderLayersList();
         });
 
-        // lightweight checks during transform to avoid objects flying off screen while dragging
-        this.fabricCanvas.on('object:moving', (e) => this._ensureObjectWithinCanvas(e.target));
-        this.fabricCanvas.on('object:scaling', (e) => this._ensureObjectWithinCanvas(e.target));
-        this.fabricCanvas.on('object:rotating', (e) => this._ensureObjectWithinCanvas(e.target));
-    },
+        self.fabricCanvas.on('selection:updated', function () {
+            self._updateControls();
+            self._renderLayersList();
+        });
 
-    _ensureObjectWithinCanvas: function (obj) {
-        if (!obj) return;
-        // minimal no-op that avoids drastic mid-transform changes:
-        // ensure the object bbox stays inside canvas bounds (not zone) to avoid negative positions.
-        const br = obj.getBoundingRect(true, true);
-        const cw = this.fabricCanvas.getWidth();
-        const ch = this.fabricCanvas.getHeight();
-        let changed = false;
-        if (br.left < 0) { obj.left += (0 - br.left); changed = true; }
-        if (br.top < 0) { obj.top += (0 - br.top); changed = true; }
-        if (br.left + br.width > cw) { obj.left -= (br.left + br.width - cw); changed = true; }
-        if (br.top + br.height > ch) { obj.top -= (br.top + br.height - ch); changed = true; }
-        if (changed) obj.setCoords();
+        self.fabricCanvas.on('selection:cleared', function () {
+            self._hideControls();
+            self._renderLayersList();
+        });
+
+        self.fabricCanvas.on('object:added', function (e) {
+            if (e.target && e.target.isZoneRect !== true && e.target !== self.zoneRect) {
+                if (!self.isUndoRedoAction) {
+                    self._saveState();
+                }
+                self._onObjectAdded(e.target);
+                // assign id and refresh layers list
+                try {
+                    self._assignLayerId(e.target);
+                } catch (err) {
+                    console.warn('assignLayerId failed', err);
+                }
+                self._renderLayersList();
+            }
+        });
+
+        self.fabricCanvas.on('object:modified', function (e) {
+            if (e.target && e.target.isZoneRect !== true && e.target !== self.zoneRect) {
+                if (!self.isUndoRedoAction) {
+                    self._saveState();
+                }
+                self._clampObjectToZone(e.target);
+                self._renderLayersList();
+            }
+        });
+
+        self.fabricCanvas.on('object:removed', function (e) {
+            if (e.target && e.target.isZoneRect !== true && e.target !== self.zoneRect) {
+                if (!self.isUndoRedoAction) {
+                    self._saveState();
+                }
+                self._renderLayersList();
+            }
+        });
+
+        self.fabricCanvas.on('object:moving', function (e) {
+            if (e.target && e.target.isZoneRect !== true && e.target !== self.zoneRect) {
+                self._clampObjectToZone(e.target);
+            }
+        });
+
+        self.fabricCanvas.on('object:scaling', function (e) {
+            if (e.target && e.target.isZoneRect !== true && e.target !== self.zoneRect) {
+                self._clampObjectToZone(e.target);
+            }
+        });
+
+        self.fabricCanvas.on('object:rotating', function (e) {
+            if (e.target && e.target.isZoneRect !== true && e.target !== self.zoneRect) {
+                self._clampObjectToZone(e.target);
+            }
+        });
+
+        // Ensure zone stays on top after any render
+        self.fabricCanvas.on('after:render', function () {
+            if (self.zoneRect && !self.isUndoRedoAction) {
+                const currentIndex = self.fabricCanvas.getObjects().indexOf(self.zoneRect);
+                const lastIndex = self.fabricCanvas.getObjects().length - 1;
+                if (currentIndex !== lastIndex) {
+                    self.fabricCanvas.bringToFront(self.zoneRect);
+                }
+            }
+        });
     },
 
     _onObjectAdded: function (obj) {
-        if (!obj) return;
-        // If there is an active restricted zone, position new objects inside it
-        if (this.zone) {
-            // center inside zone with small padding
-            const cx = this.zone.bound_x + (this.zone.width / 2);
-            const cy = this.zone.bound_y + (this.zone.height / 2);
-            obj.set({ left: cx, top: cy });
-            // fit object to zone a bit if it's too large
-            const br = obj.getBoundingRect(true, true);
-            if (br.width > this.zone.width) {
-                const scale = (this.zone.width - 20) / (obj.width || 1);
-                obj.scaleX = Math.min(obj.scaleX || 1, scale);
+        const self = this;
+        if (!obj || obj.isZoneRect === true || obj === self.zoneRect) return;
+
+        // Skip auto-positioning during undo/redo or restoration
+        if (self.isUndoRedoAction) {
+            if (self.zoneRect) {
+                self.fabricCanvas.bringToFront(self.zoneRect);
             }
-            if (br.height > this.zone.height) {
-                const scale = (this.zone.height - 20) / (obj.height || 1);
-                obj.scaleY = Math.min(obj.scaleY || 1, scale);
+            return;
+        }
+
+        // Wait for object to be fully added
+        setTimeout(function () {
+            if (self.zone && obj && !obj.isZoneRect) {
+                const cx = self.zone.bound_x + (self.zone.width / 2);
+                const cy = self.zone.bound_y + (self.zone.height / 2);
+
+                obj.set({
+                    left: cx,
+                    top: cy,
+                    originX: 'center',
+                    originY: 'center'
+                });
+                obj.setCoords();
+
+                // Scale down if larger than zone
+                const br = obj.getBoundingRect(true, true);
+                if (br.width > self.zone.width - 20 || br.height > self.zone.height - 20) {
+                    const scaleX = (self.zone.width - 40) / obj.width;
+                    const scaleY = (self.zone.height - 40) / obj.height;
+                    const scale = Math.min(scaleX, scaleY);
+
+                    obj.set({
+                        scaleX: scale,
+                        scaleY: scale
+                    });
+                    obj.setCoords();
+                }
             }
-            obj.setCoords();
-            if (this.zoneRect) this.zoneRect.bringToFront();
-            this.fabricCanvas.renderAll();
-        }
-    },
 
-    _clampDuringMove: function (obj) {
-        if (!this.zone) return;
-
-        let br = obj.getBoundingRect(true, true);
-
-        if (br.left < this.zone.bound_x ||
-            br.top < this.zone.bound_y ||
-            br.left + br.width > this.zone.bound_x + this.zone.width ||
-            br.top + br.height > this.zone.bound_y + this.zone.height
-        ) {
-            obj.setCoords();
-        }
+            // Always ensure zone is on top
+            if (self.zoneRect) {
+                self.fabricCanvas.bringToFront(self.zoneRect);
+            }
+            self.fabricCanvas.renderAll();
+        }, 10);
     },
 
     _setupKeyboardShortcuts: function () {
-        $(document).on('keydown', (e) => {
+        const self = this;
+        $(document).on('keydown', function (e) {
             if ($(e.target).is('input, textarea')) return;
 
-            const obj = this.fabricCanvas.getActiveObject();
-
-            if ((e.key === 'Delete' || e.key === 'Backspace') && obj) {
+            const obj = self.fabricCanvas.getActiveObject();
+            if ((e.key === 'Delete' || e.key === 'Backspace') && obj && obj !== self.zoneRect) {
                 e.preventDefault();
-                this._deleteActiveObject();
+                self._deleteActiveObject();
             } else if (e.ctrlKey || e.metaKey) {
                 if (e.key === 'z') {
                     e.preventDefault();
-                    e.shiftKey ? this._onClickRedo() : this._onClickUndo();
+                    if (e.shiftKey) {
+                        self._onClickRedo();
+                    } else {
+                        self._onClickUndo();
+                    }
                 } else if (e.key === 'y') {
                     e.preventDefault();
-                    this._onClickRedo();
-                } else if (e.key === 'd' && obj) {
-                    e.preventDefault();
-                    this._onClickDuplicate();
-                }
+                    self._onClickRedo();
+                } 
             }
         });
     },
 
     _loadProductData: function () {
-        this.productId = parseInt(this.$('#product_id').val());
-        return rpc('/shop/product_personalization_data', { product_id: this.productId })
-            .then(data => {
-                this.productData = data || {};
-                if (!data) {
-                    console.error('Missing product data');
-                }
-                return data;
-            })
-            .catch(error => {
-                console.error('Failed to load product data:', error);
-                alert('Failed to load product data. Please refresh.');
-                throw error;
-            });
+        const self = this;
+        self.productId = parseInt(self.$('#product_id').val());
+        
+        // In edit mode, use the stored variant ID
+        const variantIdParam = self.editMode && self.editVariantId ? self.editVariantId : null;
+
+        return rpc('/shop/product_personalization_data', {
+            product_id: self.productId,
+            variant_id: variantIdParam
+        }).then(function (data) {
+            if (data.error) {
+                alert(data.error);
+                throw new Error(data.error);
+            }
+            self.productData = data;
+            self.activeVariantId = data.active_variant_id;
+            return data;
+        }).catch(function (error) {
+            console.error('Failed to load product data:', error);
+            alert('Failed to load product data. Please refresh.');
+            throw error;
+        });
     },
 
-    /**************************************************************************
-     * Controls UI update / history (unchanged)
-     **************************************************************************/
+    _onVariantChange: function (ev) {
+        const self = this;
+        
+        if (self.editMode) {
+            ev.preventDefault();
+            alert('Cannot change variant while editing an existing design');
+            return;
+        }
+
+        const newVariantId = parseInt(ev.target.value);
+        if (!newVariantId || newVariantId === self.activeVariantId) return;
+
+        // Save current variant's design before switching
+        self._saveCurrentSideState();
+
+        // Clear canvas and reset state
+        self.fabricCanvas.clear();
+        self.zoneRect = null;
+        self.zone = null;
+
+        // Switch variant
+        self.activeVariantId = newVariantId;
+        self.designData = {};
+
+        return rpc('/shop/product_personalization_data', {
+            product_id: self.productId,
+            variant_id: newVariantId
+        }).then(function (data) {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            self.productData = data;
+
+            // Re-initialize design type selector
+            const $selector = self.$('#design_type_selector');
+            const types = data.design_types || [];
+
+            $selector.empty();
+            types.forEach(function (t) {
+                const label = t.replace(/_/g, ' ').replace(/\b\w/g, function (c) {
+                    return c.toUpperCase();
+                });
+                $selector.append('<option value="' + t + '">' + label + '</option>');
+            });
+
+            const defaultType = data.default_design_type || types[0];
+            self.activeDesignType = defaultType;
+            $selector.val(defaultType);
+
+            if (defaultType) {
+                self._loadDesignType(defaultType);
+            }
+        }).catch(function (error) {
+            console.error('Failed to load variant data:', error);
+            alert('Failed to load variant. Please try again.');
+        });
+    },
+
+    _onMenuItemClick: function (ev) {
+        const $target = $(ev.currentTarget);
+        const menuType = $target.data('menu');
+
+        // Remove active from all
+        this.$('.menu-item').removeClass('active');
+        $target.addClass('active');
+
+        // Hide all panels
+        this.$('.menu-panel').hide();
+
+        // Show selected panel
+        this.$('#' + menuType + '_panel').show();
+    },
 
     _saveState: function () {
+        const self = this;
         try {
-            this.history = this.history.slice(0, this.historyStep + 1);
-            this.history.push(JSON.stringify(this.fabricCanvas.toJSON()));
-            this.historyStep++;
-            this._updateHistoryButtons();
+            self.history = self.history.slice(0, self.historyStep + 1);
+
+            const canvasJSON = self.fabricCanvas.toJSON();
+
+            // Filter out zone rectangles from history
+            if (canvasJSON.objects) {
+                canvasJSON.objects = canvasJSON.objects.filter(function (obj) {
+                    return !obj.isZoneRect && obj.name !== 'zoneRect';
+                });
+            }
+
+            self.history.push(JSON.stringify(canvasJSON));
+            self.historyStep++;
+            self._updateHistoryButtons();
         } catch (e) {
             console.error('saveState error', e);
         }
@@ -232,24 +425,27 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
     },
 
     _loadHistoryState: function () {
-        this.isUndoRedoAction = true;
-        const bg = this.fabricCanvas.backgroundImage;
+        const self = this;
+        self.isUndoRedoAction = true;
+        const bg = self.fabricCanvas.backgroundImage;
+        const currentZone = self.zone;
 
-        this.fabricCanvas.loadFromJSON(this.history[this.historyStep], () => {
-            if (bg) this.fabricCanvas.setBackgroundImage(bg, this.fabricCanvas.renderAll.bind(this.fabricCanvas));
-            this.fabricCanvas.renderAll();
-            this.isUndoRedoAction = false;
-            this._updateHistoryButtons();
+        self.fabricCanvas.loadFromJSON(self.history[self.historyStep], function () {
+            if (bg) {
+                self.fabricCanvas.setBackgroundImage(bg, self.fabricCanvas.renderAll.bind(self.fabricCanvas));
+            }
+            if (currentZone) {
+                self._setZone(currentZone);
+            }
+            self.fabricCanvas.renderAll();
+            self.isUndoRedoAction = false;
+            self._updateHistoryButtons();
         });
-    },
-
-    _onClickDelete: function () {
-        this._deleteActiveObject();
     },
 
     _deleteActiveObject: function () {
         const obj = this.fabricCanvas.getActiveObject();
-        if (obj) {
+        if (obj && obj !== this.zoneRect) {
             this.fabricCanvas.remove(obj);
             this.fabricCanvas.renderAll();
         }
@@ -257,7 +453,10 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
 
     _updateControls: function () {
         const obj = this.fabricCanvas.getActiveObject();
-        if (!obj) return this._hideControls();
+        if (!obj || obj === this.zoneRect) {
+            this._hideControls();
+            return;
+        }
 
         const isText = obj.type === 'i-text' || obj.type === 'text';
         const isImage = obj.type === 'image';
@@ -279,7 +478,6 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
             this.$('#shape_stroke_width').val(obj.strokeWidth || 2);
         }
 
-        this.$('#lock_object').toggleClass('active', obj.lockMovementX);
     },
 
     _hideControls: function () {
@@ -290,26 +488,23 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         if (!color || color.startsWith('#')) return color || '#000000';
         const rgb = color.match(/\d+/g);
         if (!rgb || rgb.length < 3) return '#000000';
-        return '#' + rgb.slice(0, 3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
+        return '#' + rgb.slice(0, 3).map(function (x) {
+            return parseInt(x).toString(16).padStart(2, '0');
+        }).join('');
     },
-
-    _deleteActiveObject: function () {
-        const obj = this.fabricCanvas.getActiveObject();
-        if (obj) {
-            this.fabricCanvas.remove(obj);
-            this.fabricCanvas.renderAll();
-        }
-    },
-
-    /**************************************************************************
-     * Add objects (text/image/shape) - unchanged from your original
-     **************************************************************************/
 
     _onClickAddText: function () {
-        if (!this.fabricCanvas) return alert('Canvas not ready');
+        const self = this;
+        if (!self.fabricCanvas) {
+            alert('Canvas not ready');
+            return;
+        }
 
-        const text = this.$('#personalization_text').val().trim();
-        if (!text) return alert('Please enter some text');
+        const text = self.$('#personalization_text').val().trim();
+        if (!text) {
+            alert('Please enter some text');
+            return;
+        }
 
         const textObj = new fabric.IText(text, {
             left: 100,
@@ -319,22 +514,25 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
             fontSize: 40
         });
 
-        this.fabricCanvas.add(textObj);
-        this.fabricCanvas.setActiveObject(textObj);
-        this.fabricCanvas.renderAll();
-        this.$('#personalization_text').val('');
+        self.fabricCanvas.add(textObj);
+        // store a human-friendly label for layers list
+        try { textObj.__label = text; } catch (e) { }
+        self.fabricCanvas.setActiveObject(textObj);
+        self.fabricCanvas.renderAll();
+        self.$('#personalization_text').val('');
     },
 
     _onChangeTextProperty: function (ev) {
         const obj = this.fabricCanvas.getActiveObject();
         if (!obj || (obj.type !== 'i-text' && obj.type !== 'text')) return;
 
-        const prop = {
+        const propMap = {
             'text_font_family': ['fontFamily', ev.target.value],
             'text_font_size': ['fontSize', parseInt(ev.target.value)],
             'text_color': ['fill', ev.target.value]
-        }[ev.target.id];
+        };
 
+        const prop = propMap[ev.target.id];
         if (prop) {
             obj.set(prop[0], prop[1]);
             this.fabricCanvas.renderAll();
@@ -345,12 +543,13 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         const obj = this.fabricCanvas.getActiveObject();
         if (!obj || (obj.type !== 'i-text' && obj.type !== 'text')) return;
 
-        const style = {
+        const styleMap = {
             'text_bold': ['fontWeight', obj.fontWeight === 'bold' ? 'normal' : 'bold'],
             'text_italic': ['fontStyle', obj.fontStyle === 'italic' ? 'normal' : 'italic'],
             'text_underline': ['underline', !obj.underline]
-        }[ev.target.id];
+        };
 
+        const style = styleMap[ev.target.id];
         if (style) {
             obj.set(style[0], style[1]);
             $(ev.currentTarget).toggleClass('active');
@@ -358,73 +557,135 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         }
     },
 
-    _onClickTextAlign: function (ev) {
-        const obj = this.fabricCanvas.getActiveObject();
-        if (obj && (obj.type === 'i-text' || obj.type === 'text')) {
-            obj.set('textAlign', ev.target.id.replace('text_align_', ''));
-            this.fabricCanvas.renderAll();
-        }
-    },
-
     _onClickAddImage: function () {
-        if (!this.fabricCanvas) return alert('Canvas not ready');
+        const self = this;
+        if (!self.fabricCanvas) {
+            alert('Canvas not ready');
+            return;
+        }
 
-        const files = this.$('#personalization_image_upload')[0].files;
-        if (!files?.length) return alert('Please select an image file');
+        const files = self.$('#personalization_image_upload')[0].files;
+        if (!files || !files.length) {
+            alert('Please select an image file');
+            return;
+        }
 
-        Array.from(files).forEach((file, i) => {
+        Array.from(files).forEach(function (file, i) {
             const reader = new FileReader();
-            reader.onload = (e) => {
-                fabric.Image.fromURL(e.target.result, (img) => {
+            reader.onload = function (e) {
+                fabric.Image.fromURL(e.target.result, function (img) {
                     if (!img) return;
                     img.scaleToWidth(150);
-                    img.set({ left: 100 + i * 20, top: 100 + i * 20 });
-                    this.fabricCanvas.add(img);
-                    this.fabricCanvas.setActiveObject(img);
-                    this.fabricCanvas.renderAll();
+                    img.set({
+                        left: 100 + i * 20,
+                        top: 100 + i * 20
+                    });
+                    // attach filename as label (used in layers list)
+                    try {
+                        if (img._element) img._element.name = file.name;
+                    } catch (err) { }
+                    try { img.__label = file.name; } catch (err) { }
+                    self.fabricCanvas.add(img);
+                    self.fabricCanvas.setActiveObject(img);
+                    self.fabricCanvas.renderAll();
                 });
             };
             reader.readAsDataURL(file);
         });
 
-        this.$('#personalization_image_upload').val('');
+        self.$('#personalization_image_upload').val('');
     },
 
     _onClickAddShape: function () {
-        if (!this.fabricCanvas) return alert('Canvas not ready');
+        const self = this;
+        if (!self.fabricCanvas) {
+            alert('Canvas not ready');
+            return;
+        }
 
-        const props = { left: 100, top: 100, fill: '#3b82f6', stroke: '#1e40af', strokeWidth: 2 };
-        const shapes = {
-            rect: () => new fabric.Rect({ ...props, width: 100, height: 100 }),
-            square: () => new fabric.Rect({ ...props, width: 100, height: 100 }),
-            circle: () => new fabric.Circle({ ...props, radius: 50 }),
-            ellipse: () => new fabric.Ellipse({ ...props, rx: 60, ry: 40 }),
-            triangle: () => new fabric.Triangle({ ...props, width: 100, height: 100 }),
-            line: () => new fabric.Line([50, 50, 200, 50], { ...props, fill: null, strokeWidth: 4 }),
-            polygon: () => new fabric.Polygon([{ x: 50, y: 0 }, { x: 100, y: 38 }, { x: 82, y: 100 }, { x: 18, y: 100 }, { x: 0, y: 38 }], props),
-            star: () => {
+        const props = {
+            left: 100,
+            top: 100,
+            fill: '#3b82f6',
+            stroke: '#1e40af',
+            strokeWidth: 2
+        };
+
+        const $shapeSelect = self.$('#personalization_shape');
+        const shapeType = $shapeSelect.val();
+        const shapeLabel = $shapeSelect.find('option:selected').text() || shapeType;
+        let shape = null;
+
+        switch (shapeType) {
+            case 'rect':
+            case 'square':
+                shape = new fabric.Rect({ ...props, width: 100, height: 100 });
+                break;
+            case 'circle':
+                shape = new fabric.Circle({ ...props, radius: 50 });
+                break;
+            case 'ellipse':
+                shape = new fabric.Ellipse({ ...props, rx: 60, ry: 40 });
+                break;
+            case 'triangle':
+                shape = new fabric.Triangle({ ...props, width: 100, height: 100 });
+                break;
+            case 'line':
+                shape = new fabric.Line([50, 50, 200, 50], { ...props, fill: null, strokeWidth: 4 });
+                break;
+            case 'polygon':
+                shape = new fabric.Polygon([
+                    { x: 50, y: 0 },
+                    { x: 100, y: 38 },
+                    { x: 82, y: 100 },
+                    { x: 18, y: 100 },
+                    { x: 0, y: 38 }
+                ], props);
+                break;
+            case 'star':
                 const pts = [];
                 for (let i = 0; i < 10; i++) {
                     const r = i % 2 ? 25 : 50;
                     const a = (i * Math.PI) / 5;
-                    pts.push({ x: 50 + r * Math.sin(a), y: 50 - r * Math.cos(a) });
+                    pts.push({
+                        x: 50 + r * Math.sin(a),
+                        y: 50 - r * Math.cos(a)
+                    });
                 }
-                return new fabric.Polygon(pts, props);
-            },
-            heart: () => new fabric.Path('M 50,30 C 50,20 40,10 30,10 C 20,10 10,20 10,30 C 10,50 30,70 50,90 C 70,70 90,50 90,30 C 90,20 80,10 70,10 C 60,10 50,20 50,30 Z', { ...props, scaleX: 0.8, scaleY: 0.8 }),
-            arrow: () => new fabric.Path('M 10,50 L 60,50 L 60,30 L 90,55 L 60,80 L 60,60 L 10,60 Z', props),
-            hexagon: () => new fabric.Polygon(Array.from({ length: 6 }, (_, i) => ({
-                x: 50 + 50 * Math.cos(Math.PI / 3 * i),
-                y: 50 + 50 * Math.sin(Math.PI / 3 * i)
-            })), props),
-            diamond: () => new fabric.Polygon([{ x: 50, y: 0 }, { x: 100, y: 50 }, { x: 50, y: 100 }, { x: 0, y: 50 }], props)
-        };
+                shape = new fabric.Polygon(pts, props);
+                break;
+            case 'heart':
+                shape = new fabric.Path('M 50,30 C 50,20 40,10 30,10 C 20,10 10,20 10,30 C 10,50 30,70 50,90 C 70,70 90,50 90,30 C 90,20 80,10 70,10 C 60,10 50,20 50,30 Z', { ...props, scaleX: 0.8, scaleY: 0.8 });
+                break;
+            case 'arrow':
+                shape = new fabric.Path('M 10,50 L 60,50 L 60,30 L 90,55 L 60,80 L 60,60 L 10,60 Z', props);
+                break;
+            case 'hexagon':
+                const hexPts = [];
+                for (let i = 0; i < 6; i++) {
+                    hexPts.push({
+                        x: 50 + 50 * Math.cos(Math.PI / 3 * i),
+                        y: 50 + 50 * Math.sin(Math.PI / 3 * i)
+                    });
+                }
+                shape = new fabric.Polygon(hexPts, props);
+                break;
+            case 'diamond':
+                shape = new fabric.Polygon([
+                    { x: 50, y: 0 },
+                    { x: 100, y: 50 },
+                    { x: 50, y: 100 },
+                    { x: 0, y: 50 }
+                ], props);
+                break;
+        }
 
-        const shape = shapes[this.$('#personalization_shape').val()]?.();
         if (shape) {
-            this.fabricCanvas.add(shape);
-            this.fabricCanvas.setActiveObject(shape);
-            this.fabricCanvas.renderAll();
+            // attach a readable label for the layers list (from dropdown)
+            try { shape.__label = shapeLabel; } catch (e) { }
+            self.fabricCanvas.add(shape);
+            self.fabricCanvas.setActiveObject(shape);
+            self.fabricCanvas.renderAll();
         }
     },
 
@@ -432,52 +693,15 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         const obj = this.fabricCanvas.getActiveObject();
         if (!obj || obj.type === 'i-text' || obj.type === 'text' || obj.type === 'image') return;
 
-        const prop = {
+        const propMap = {
             'shape_fill_color': ['fill', ev.target.value],
             'shape_stroke_color': ['stroke', ev.target.value],
             'shape_stroke_width': ['strokeWidth', parseInt(ev.target.value)]
-        }[ev.target.id];
+        };
 
+        const prop = propMap[ev.target.id];
         if (prop) {
             obj.set(prop[0], prop[1]);
-            this.fabricCanvas.renderAll();
-        }
-    },
-
-    _onClickLayerAction: function (ev) {
-        const obj = this.fabricCanvas.getActiveObject();
-        if (!obj) return;
-
-        if (ev.target.id === 'bring_to_front') this.fabricCanvas.bringToFront(obj);
-        else if (ev.target.id === 'send_to_back') this.fabricCanvas.sendToBack(obj);
-
-        this.fabricCanvas.renderAll();
-    },
-
-    _onClickDuplicate: function () {
-        const obj = this.fabricCanvas.getActiveObject();
-        if (obj) {
-            obj.clone((cloned) => {
-                cloned.set({ left: cloned.left + 20, top: cloned.top + 20 });
-                this.fabricCanvas.add(cloned);
-                this.fabricCanvas.setActiveObject(cloned);
-                this.fabricCanvas.renderAll();
-            });
-        }
-    },
-
-    _onClickLock: function (ev) {
-        const obj = this.fabricCanvas.getActiveObject();
-        if (obj) {
-            const locked = !obj.lockMovementX;
-            obj.set({
-                lockMovementX: locked,
-                lockMovementY: locked,
-                lockRotation: locked,
-                lockScalingX: locked,
-                lockScalingY: locked,
-            });
-            $(ev.currentTarget).toggleClass('active');
             this.fabricCanvas.renderAll();
         }
     },
@@ -485,7 +709,7 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
     _onClickPresetColor: function (ev) {
         const color = $(ev.currentTarget).data('color');
         const obj = this.fabricCanvas.getActiveObject();
-        if (!obj) return;
+        if (!obj || obj === this.zoneRect) return;
 
         if (obj.type === 'i-text' || obj.type === 'text') {
             obj.set('fill', color);
@@ -498,328 +722,727 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         this.fabricCanvas.renderAll();
     },
 
-    /**************************************************************************
-     * Multi-side switching & load/save
-     **************************************************************************/
-
-    // Initialize or populate design type selector in template
     _initDesignTypeSelector: function () {
-        const sel = this.$('#design_type_selector');
-        // If selector doesn't exist in template, create and append it
-        if (!sel.length) {
-            const container = $('<div class="design-type-wrap mb-2"><select id="design_type_selector" class="form-control" /></div>');
-            // place before canvas wrapper if available
-            $('#canvas_wrapper').before(container);
-        }
-        const $selector = this.$('#design_type_selector');
+        const self = this;
 
-        // populate options from productData.design_types or from productData.designs keys
-        const types = (this.productData && this.productData.design_types && this.productData.design_types.length) ?
-            this.productData.design_types : (this.productData && this.productData.designs ? Object.keys(this.productData.designs) : []);
+        if (self.productData.variants && self.productData.variants.length > 0) {
+            const $variantSelector = self.$('#variant_selector');
+            $variantSelector.empty();
+
+            self.productData.variants.forEach(function (v) {
+                $variantSelector.append('<option value="' + v.id + '">' + v.name + '</option>');
+            });
+
+            // In edit mode, set the current variant
+            if (self.editMode && self.editVariantId) {
+                $variantSelector.val(self.editVariantId);
+            } else {
+                $variantSelector.val(self.activeVariantId);
+            }
+
+            // Disable variant menu in edit mode
+            if (self.editMode) {
+                self.$('.menu-item[data-menu="variant"]').css({
+                    'opacity': '0.5',
+                    'pointer-events': 'none',
+                    'cursor': 'not-allowed'
+                });
+            }
+        }
+
+        // Initialize design type selector
+        const $selector = self.$('#design_type_selector');
+        const types = self.productData.design_types || [];
+
         $selector.empty();
-        types.forEach(t => {
-            $selector.append(`<option value="${t}">${t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>`);
+        types.forEach(function (t) {
+            const label = t.replace(/_/g, ' ').replace(/\b\w/g, function (c) {
+                return c.toUpperCase();
+            });
+            $selector.append('<option value="' + t + '">' + label + '</option>');
         });
 
-        // set default active design type
-        const defaultType = (this.productData && this.productData.default_design_type) || types[0] || 'front';
-        this.activeDesignType = defaultType;
+        const defaultType = self.productData.default_design_type || types[0];
+        self.activeDesignType = defaultType;
         $selector.val(defaultType);
 
-        // load that side
-        this._loadDesignType(defaultType);
+        self._loadDesignType(defaultType);
     },
 
-    // Called when selector changed
     _onDesignTypeChange: function (ev) {
         const newType = ev.target.value;
         if (!newType || newType === this.activeDesignType) return;
+
         this._saveCurrentSideState();
         this.activeDesignType = newType;
         this._loadDesignType(newType);
     },
 
-    // Save current fabric JSON for the active side in memory
     _saveCurrentSideState: function () {
+        const self = this;
         try {
-            if (!this.activeDesignType) return;
-            this.designData[this.activeDesignType] = this.fabricCanvas.toJSON();
+            if (!self.activeDesignType) return;
+
+            const canvasJSON = self.fabricCanvas.toJSON();
+
+            // Filter out zone rectangles
+            if (canvasJSON.objects) {
+                canvasJSON.objects = canvasJSON.objects.filter(function (obj) {
+                    return !obj.isZoneRect && obj.name !== 'zoneRect';
+                });
+            }
+
+            // Save ONLY for current design type
+            self.designData[self.activeDesignType] = canvasJSON;
+
         } catch (e) {
             console.error('Could not save current canvas JSON', e);
         }
     },
 
-    // Load background and zone for given design type and restore saved JSON if exists
     _loadDesignType: function (designType) {
-        // productData may already include designs map
-        const designs = (this.productData && this.productData.designs) ? this.productData.designs : {};
-        const side = designs[designType];
+        const self = this;
 
-        // if no side config found: use fallback_image_url (product image)
-        if (!side) {
-            if (this.productData && this.productData.fallback_image_url) {
-                this._setBackgroundFromUrl(this.productData.fallback_image_url, () => {
-                    this._setZone(null);
-                    this._restoreSavedJson(designType);
+        // Clear canvas completely first
+        self.fabricCanvas.clear();
+        self.zoneRect = null;
+        self.zone = null;
+
+        const designs = (self.productData && self.productData.designs) ? self.productData.designs : {};
+        const side = designs[designType];
+        const savedDesignData = self.designData[designType];
+
+        if (!side && !savedDesignData) {
+            if (self.productData && self.productData.fallback_image_url) {
+                self._setBackgroundFromUrl(self.productData.fallback_image_url, function () {
+                    self._restoreSavedJson(designType);
                 });
             } else {
-                // clear background
-                this.fabricCanvas.setBackgroundImage(null, this.fabricCanvas.renderAll.bind(this.fabricCanvas));
-                this._setZone(null);
-                this._restoreSavedJson(designType);
+                self.fabricCanvas.setBackgroundImage(null, self.fabricCanvas.renderAll.bind(self.fabricCanvas));
+                self._restoreSavedJson(designType);
             }
             return;
         }
 
-        // load side image if present
-        if (side.image_url) {
-            this._setBackgroundFromUrl(side.image_url, () => {
-                if (side.is_restricted_area) {
-                    this._setZone({ x: side.bound_x, y: side.bound_y, width: side.width, height: side.height });
+        // In edit mode, prefer the saved background image URL over the design config image
+        let backgroundUrl = null;
+        if (self.editMode && savedDesignData && savedDesignData.backgroundImageUrl) {
+            backgroundUrl = savedDesignData.backgroundImageUrl;
+        } else if (side && side.image_url) {
+            backgroundUrl = side.image_url;
+        } else if (self.productData && self.productData.fallback_image_url) {
+            backgroundUrl = self.productData.fallback_image_url;
+        }
+        debugger;
+        if (backgroundUrl) {
+            self._setBackgroundFromUrl(backgroundUrl, function () {
+                if (side && side.is_restricted_area) {
+                    const zoneData = {
+                        bound_x: parseFloat(side.bound_x) || 0,
+                        bound_y: parseFloat(side.bound_y) || 0,
+                        width: parseFloat(side.bound_width || side.width) || 0,
+                        height: parseFloat(side.bound_height || side.height) || 0
+                    };
+                    self._setZone(zoneData);
+                    self._restoreSavedJson(designType);
                 } else {
-                    this._setZone(null);
+                    self._restoreSavedJson(designType);
                 }
-                this._restoreSavedJson(designType);
             });
         } else {
-            // no image; clear bg and set zone
-            this.fabricCanvas.setBackgroundImage(null, this.fabricCanvas.renderAll.bind(this.fabricCanvas));
-            if (side.is_restricted_area) {
-                this._setZone({ x: side.bound_x, y: side.bound_y, width: side.width, height: side.height });
+            self.fabricCanvas.setBackgroundImage(null, self.fabricCanvas.renderAll.bind(self.fabricCanvas));
+            if (side && side.is_restricted_area) {
+                const zoneData = {
+                    bound_x: parseFloat(side.bound_x) || 0,
+                    bound_y: parseFloat(side.bound_y) || 0,
+                    width: parseFloat(side.bound_width || side.width) || 0,
+                    height: parseFloat(side.bound_height || side.height) || 0
+                };
+                self._setZone(zoneData);
+                self._restoreSavedJson(designType);
             } else {
-                this._setZone(null);
+                self._restoreSavedJson(designType);
             }
-            this._restoreSavedJson(designType);
         }
     },
 
-    // Helper to set background image from URL (handles scaling center)
     _setBackgroundFromUrl: function (url, callback) {
         const self = this;
-        fabric.Image.fromURL(url, (img) => {
-            img.set({ selectable: false, evented: false });
-            const w = this.fabricCanvas.getWidth();
-            const h = this.fabricCanvas.getHeight();
-            const scale = Math.min(w / img.width, h / img.height);
-            img.left = (w - img.width * scale) / 2;
-            img.top = (h - img.height * scale) / 2;
-            img.scaleX = scale; img.scaleY = scale;
-            this.fabricCanvas.setBackgroundImage(img, this.fabricCanvas.renderAll.bind(this.fabricCanvas));
+        
+        fabric.Image.fromURL(url, function (img) {
+            if (!img) {
+                console.warn('Failed to load image from URL:', url, '- retrying with absolute path');
+                
+                // If URL is relative, try with absolute path
+                if (url && url.startsWith('/')) {
+                    const absoluteUrl = window.location.origin + url;
+                    fabric.Image.fromURL(absoluteUrl, function (img2) {
+                        if (img2) {
+                            self._applyBackgroundImage(img2);
+                        } else {
+                            console.error('Failed to load image from both relative and absolute URLs:', url, absoluteUrl);
+                        }
+                        if (callback) callback();
+                    }, null, {
+                        crossOrigin: 'anonymous'
+                    });
+                } else {
+                    console.error('Failed to load image from URL:', url);
+                    if (callback) callback();
+                }
+                return;
+            }
+
+            self._applyBackgroundImage(img);
+            if (callback) callback();
+        }, null, {
+            crossOrigin: 'anonymous'
         });
     },
 
-    // Restore saved JSON for designType if exists, else clear objects but keep bg
+    _applyBackgroundImage: function (img) {
+        const self = this;
+        
+        img.set({
+            selectable: false,
+            evented: false
+        });
+
+        const w = self.fabricCanvas.getWidth();
+        const h = self.fabricCanvas.getHeight();
+        const scale = Math.min(w / img.width, h / img.height);
+
+        img.left = (w - img.width * scale) / 2;
+        img.top = (h - img.height * scale) / 2;
+        img.scaleX = scale;
+        img.scaleY = scale;
+
+        self.fabricCanvas.setBackgroundImage(img, self.fabricCanvas.renderAll.bind(self.fabricCanvas));
+    },
+
     _restoreSavedJson: function (designType) {
+        const self = this;
+
+        self.isUndoRedoAction = true;
+
         try {
-            // Save current background image src (if any) so we can reapply it after load
-            let bgSrc = null;
-            let bgProps = null;
-            const bg = this.fabricCanvas.backgroundImage;
-            if (bg && bg._element && bg._element.src) {
-                bgSrc = bg._element.src;
-                bgProps = { left: bg.left, top: bg.top, scaleX: bg.scaleX, scaleY: bg.scaleY };
+            // Remove all user objects (keep background and zone)
+            const objs = self.fabricCanvas.getObjects().slice();
+            for (let i = 0; i < objs.length; i++) {
+                const o = objs[i];
+                if (o.isZoneRect === true || o.name === 'zoneRect') continue;
+                self.fabricCanvas.remove(o);
             }
 
-            // Remove all user objects but keep zoneRect
-            const objs = this.fabricCanvas.getObjects().slice(); // copy
-            for (let o of objs) {
-                if (this.zoneRect && o === this.zoneRect) {
-                    continue;
+            // Load ONLY the saved data for THIS specific design type
+            const savedForThisType = self.designData[designType];
+
+            if (savedForThisType) {
+                let jsonToLoad = savedForThisType;
+
+                if (typeof jsonToLoad === 'string') {
+                    jsonToLoad = JSON.parse(jsonToLoad);
                 }
-                this.fabricCanvas.remove(o);
-            }
 
-            // If we have stored JSON for this design type, load it
-            if (this.designData[designType]) {
-                // designData might be an object or stringified; normalize
-                const jsonToLoad = (typeof this.designData[designType] === 'string') ?
-                    JSON.parse(this.designData[designType]) : this.designData[designType];
+                // Ensure no zone rectangles in saved data
+                if (jsonToLoad.objects) {
+                    jsonToLoad.objects = jsonToLoad.objects.filter(function (obj) {
+                        return obj.isZoneRect !== true && obj.name !== 'zoneRect';
+                    });
+                }
 
-                // load objects from JSON (this will recreate user objects)
-                this.fabricCanvas.loadFromJSON(jsonToLoad, () => {
-                    // ensure background is present (reapply using helper if we had src)
-                    if (bgSrc) {
-                        this._setBackgroundFromUrl(bgSrc, () => {
-                            // zoneRect may have been removed/recreated by loadFromJSON - ensure our zoneRect exists and on top
-                            if (this.zoneRect) this.zoneRect.bringToFront();
-                            this.fabricCanvas.renderAll();
-                        });
-                    } else {
-                        if (this.zoneRect) this.zoneRect.bringToFront();
-                        this.fabricCanvas.renderAll();
+                self.fabricCanvas.loadFromJSON(jsonToLoad, function () {
+                    // Ensure zone stays on top after loading
+                    if (self.zoneRect) {
+                        self.fabricCanvas.bringToFront(self.zoneRect);
                     }
-                    // push initial state into history
-                    this._saveState();
+                    self.fabricCanvas.renderAll();
+                    // assign stable layer ids and update layers UI
+                    try { self._assignLayerIds(); } catch (e) { }
+                    try { self._renderLayersList(); } catch (e) { }
+                    self.isUndoRedoAction = false;
+
+                    // Initialize history for this design type
+                    setTimeout(function () {
+                        self.history = [];
+                        self.historyStep = -1;
+                        self._saveState();
+                    }, 100);
                 });
             } else {
-                // no saved JSON: keep only background + zoneRect
-                if (bgSrc) {
-                    this._setBackgroundFromUrl(bgSrc, () => {
-                        if (this.zoneRect) this.zoneRect.bringToFront();
-                        this.fabricCanvas.renderAll();
-                    });
-                } else {
-                    if (this.zoneRect) this.zoneRect.bringToFront();
-                    this.fabricCanvas.renderAll();
+                // No saved data for this design type - start fresh
+                if (self.zoneRect) {
+                    self.fabricCanvas.bringToFront(self.zoneRect);
                 }
-                // save initial blank state
-                this._saveState();
+                self.fabricCanvas.renderAll();
+                try { self._assignLayerIds(); } catch (e) { }
+                try { self._renderLayersList(); } catch (e) { }
+                self.isUndoRedoAction = false;
+
+                // Initialize history
+                setTimeout(function () {
+                    self.history = [];
+                    self.historyStep = -1;
+                    self._saveState();
+                }, 100);
             }
         } catch (e) {
             console.error('Error restoring JSON for designType', designType, e);
+            self.isUndoRedoAction = false;
         }
     },
 
-
-    /**************************************************************************
-     * Zone rectangle visual + clamp
-     **************************************************************************/
-
     _setZone: function (zoneObj) {
-        if (!zoneObj) {
-            this.zone = null;
-            if (this.zoneRect) {
-                try { this.fabricCanvas.remove(this.zoneRect); } catch (e) { }
-                this.zoneRect = null;
+        const self = this;
+
+        // Force remove all existing zone rectangles
+        const allObjs = self.fabricCanvas.getObjects();
+        for (let i = allObjs.length - 1; i >= 0; i--) {
+            if (allObjs[i].isZoneRect === true || allObjs[i].name === 'zoneRect') {
+                self.fabricCanvas.remove(allObjs[i]);
             }
-            this.fabricCanvas.renderAll();
+        }
+
+        self.zoneRect = null;
+        self.zone = null;
+
+        if (!zoneObj) {
+            self.fabricCanvas.renderAll();
             return;
         }
 
-        // Accept either x/y or bound_x/bound_y keys coming from backend
-        const bx = parseFloat(zoneObj.x ?? zoneObj.bound_x) || 0;
-        const by = parseFloat(zoneObj.y ?? zoneObj.bound_y) || 0;
-        const bw = parseFloat(zoneObj.width ?? zoneObj.bound_width) || 0;
-        const bh = parseFloat(zoneObj.height ?? zoneObj.bound_height) || 0;
+        const bx = parseFloat(zoneObj.bound_x) || 0;
+        const by = parseFloat(zoneObj.bound_y) || 0;
+        const bw = parseFloat(zoneObj.width) || 0;
+        const bh = parseFloat(zoneObj.height) || 0;
 
-        this.zone = { bound_x: bx, bound_y: by, width: bw, height: bh };
-
-        // remove previous zoneRect
-        if (this.zoneRect) {
-            try { this.fabricCanvas.remove(this.zoneRect); } catch (e) { }
-            this.zoneRect = null;
+        if (bw <= 0 || bh <= 0) {
+            console.warn('Invalid zone dimensions');
+            return;
         }
 
-        this.zoneRect = new fabric.Rect({
-            left: this.zone.bound_x,
-            top: this.zone.bound_y,
-            width: this.zone.width,
-            height: this.zone.height,
-            fill: 'rgba(0,150,255,0.10)',    // subtle overlay
+        self.zone = {
+            bound_x: bx,
+            bound_y: by,
+            width: bw,
+            height: bh
+        };
+
+        self.zoneRect = new fabric.Rect({
+            left: bx,
+            top: by,
+            width: bw,
+            height: bh,
+            fill: 'rgba(0, 150, 255, 0.15)',
             stroke: '#0096FF',
-            strokeDashArray: [6, 6],
+            strokeWidth: 3,
+            strokeDashArray: [10, 5],
             selectable: false,
             evented: false,
             hoverCursor: 'default',
+            hasControls: false,
+            hasBorders: false,
+            lockMovementX: true,
+            lockMovementY: true,
+            lockScalingX: true,
+            lockScalingY: true,
+            lockRotation: true,
+            isZoneRect: true,
+            name: 'zoneRect',
+            excludeFromExport: true
         });
 
-        // add and ensure it is on TOP of all objects (visible over background and user objects)
-        this.fabricCanvas.add(this.zoneRect);
-        this.zoneRect.bringToFront();
+        self.fabricCanvas.add(self.zoneRect);
+        self.fabricCanvas.bringToFront(self.zoneRect);
+        self.fabricCanvas.renderAll();
+    },
 
-        // keep it above background if background exists
-        this.fabricCanvas.renderAll();
+    _ensureZoneOnTop: function () {
+        const self = this;
+        // Remove any duplicate zones
+        const allObjs = self.fabricCanvas.getObjects();
+        const zones = [];
+
+        for (let i = 0; i < allObjs.length; i++) {
+            if (allObjs[i].isZoneRect === true || allObjs[i].name === 'zoneRect') {
+                zones.push(allObjs[i]);
+            }
+        }
+
+        // Keep only the current zoneRect, remove others
+        for (let i = 0; i < zones.length; i++) {
+            if (zones[i] !== self.zoneRect) {
+                self.fabricCanvas.remove(zones[i]);
+            }
+        }
+
+        // Bring current zone to front
+        if (self.zoneRect) {
+            self.fabricCanvas.bringToFront(self.zoneRect);
+        }
     },
 
     _clampObjectToZone: function (obj) {
-        if (!obj || !this.zone) return;
+        const self = this;
+        if (!obj || !self.zone || obj === self.zoneRect) return;
 
         obj.setCoords();
         const br = obj.getBoundingRect(true, true);
-        let left = br.left, top = br.top, width = br.width, height = br.height;
 
-        const minLeft = this.zone.bound_x;
-        const minTop = this.zone.bound_y;
-        const maxLeft = this.zone.bound_x + this.zone.width - width;
-        const maxTop = this.zone.bound_y + this.zone.height - height;
+        const minLeft = self.zone.bound_x;
+        const minTop = self.zone.bound_y;
+        const maxRight = self.zone.bound_x + self.zone.width;
+        const maxBottom = self.zone.bound_y + self.zone.height;
 
-        // If object is larger than zone, scale it down proportionally
-        let resized = false;
-        if (width > this.zone.width) {
-            const scaleX = (this.zone.width - 10) / (obj.width || 1);
-            obj.scaleX = Math.min(obj.scaleX || 1, scaleX);
-            resized = true;
+        let needsAdjustment = false;
+
+        if (br.width > self.zone.width) {
+            const scale = (self.zone.width - 10) / obj.width;
+            obj.scaleX = Math.min(obj.scaleX, scale);
+            obj.scaleY = Math.min(obj.scaleY, scale);
+            needsAdjustment = true;
         }
-        if (height > this.zone.height) {
-            const scaleY = (this.zone.height - 10) / (obj.height || 1);
-            obj.scaleY = Math.min(obj.scaleY || 1, scaleY);
-            resized = true;
+
+        if (br.height > self.zone.height) {
+            const scale = (self.zone.height - 10) / obj.height;
+            obj.scaleX = Math.min(obj.scaleX, scale);
+            obj.scaleY = Math.min(obj.scaleY, scale);
+            needsAdjustment = true;
         }
-        if (resized) {
+
+        if (needsAdjustment) {
             obj.setCoords();
         }
 
-        // recompute bounding rect after possible resize
         const br2 = obj.getBoundingRect(true, true);
-        left = br2.left; top = br2.top; width = br2.width; height = br2.height;
+        let correctedLeft = obj.left;
+        let correctedTop = obj.top;
 
-        let correctedLeft = left;
-        let correctedTop = top;
-        if (left < minLeft) correctedLeft = minLeft;
-        if (top < minTop) correctedTop = minTop;
-        if (left > maxLeft) correctedLeft = maxLeft;
-        if (top > maxTop) correctedTop = maxTop;
+        if (br2.left < minLeft) {
+            correctedLeft = obj.left + (minLeft - br2.left);
+        }
+        if (br2.top < minTop) {
+            correctedTop = obj.top + (minTop - br2.top);
+        }
+        if (br2.left + br2.width > maxRight) {
+            correctedLeft = obj.left - ((br2.left + br2.width) - maxRight);
+        }
+        if (br2.top + br2.height > maxBottom) {
+            correctedTop = obj.top - ((br2.top + br2.height) - maxBottom);
+        }
 
-        if (correctedLeft !== left || correctedTop !== top) {
-            obj.left += (correctedLeft - left);
-            obj.top += (correctedTop - top);
+        if (correctedLeft !== obj.left || correctedTop !== obj.top) {
+            obj.set({
+                left: correctedLeft,
+                top: correctedTop
+            });
             obj.setCoords();
         }
 
-        // Ensure zone rectangle remains on top
-        if (this.zoneRect) this.zoneRect.bringToFront();
-        this.fabricCanvas.renderAll();
+        self._ensureZoneOnTop();
+        self.fabricCanvas.renderAll();
     },
 
+    _onChangeQty: function (ev) {
+        const qty = parseInt(ev.target.value) || 1;
+        this.$('#product_qty').val(Math.max(1, qty));
+    },
 
-    /**************************************************************************
-     * Add-to-cart: send all sides' JSON + previews to backend
-     **************************************************************************/
+    _onClickAddToCartPersonalized: async function () {
+        const self = this;
 
-    _generatePreviewDataURL: function () {
-        try {
-            return this.fabricCanvas.toDataURL({ format: 'png', quality: 0.8 });
-        } catch (e) {
-            console.error('Could not generate preview', e);
-            return false;
+        if (!self.fabricCanvas || !self.activeVariantId) {
+            alert('Canvas not ready or no variant selected');
+            return;
         }
-    },
 
-    _onClickAddToCartPersonalized: function () {
-        if (!this.fabricCanvas) return alert('Canvas not ready');
-        this._saveCurrentSideState();
+        // Save current active design type state
+        self._saveCurrentSideState();
 
-        // Build payload of designs
         const designs = {};
-        for (const dt in this.designData) {
-            if (Object.prototype.hasOwnProperty.call(this.designData, dt) && this.designData[dt]) {
-                designs[dt] = {
-                    json: JSON.stringify(this.designData[dt]),
-                    preview: this._generatePreviewDataURL()
-                };
+        const allDesignTypes = self.productData.design_types || [];
+
+        // Process each design type separately
+        for (const dt of allDesignTypes) {
+            let canvasJSON, previewURL;
+
+            if (self.designData[dt] && self.designData[dt].objects && self.designData[dt].objects.length > 0) {
+                // User customized this design type
+                canvasJSON = self.designData[dt];
+                previewURL = await self._generatePreviewForDesignType(dt);
+            } else {
+                // Use original design config image
+                const designConfig = self.productData.designs[dt];
+                previewURL = designConfig ? designConfig.image_url : self.productData.fallback_image_url;
+                canvasJSON = { version: "5.3.0", objects: [] };
             }
-        }
-        // If nothing saved, include active canvas
-        if (Object.keys(designs).length === 0 && this.activeDesignType) {
-            try {
-                designs[this.activeDesignType] = {
-                    json: JSON.stringify(this.fabricCanvas.toJSON()),
-                    preview: this._generatePreviewDataURL()
-                };
-            } catch (e) { }
+
+            const filteredJSON = {
+                ...canvasJSON,
+                objects: (canvasJSON.objects || []).filter(obj => !obj.isZoneRect && obj.name !== 'zoneRect')
+            };
+
+            designs[dt] = {
+                json: JSON.stringify(filteredJSON),
+                preview: previewURL,
+            };
         }
 
-        // Call existing endpoint
-        rpc('/shop/cart/update_personalization', {
-            product_id: this.productId,
-            add_qty: 1,
-            designs: designs
-        }).then(() => {
-            window.location.href = '/shop/cart';
-        }).catch(error => {
-            console.error('Add to cart error:', error);
-            alert('Failed to add product to cart. Please try again.');
+        const qty = self.editMode ? 1 : (parseInt(self.$('#product_qty').val()) || 1);
+
+        if (self.editMode && self.editLineId) {
+            rpc('/shop/cart/update_line_personalization', {
+                line_id: self.editLineId,
+                designs: designs
+            }).then(function (result) {
+                if (result && result.success) {
+                    window.location.href = '/shop/cart';
+                } else {
+                    alert(result.error || 'Failed to update design');
+                }
+            }).catch(function (error) {
+                console.error('Update design error:', error);
+                alert('Failed to update design');
+            });
+        } else {
+            rpc('/shop/cart/update_personalization', {
+                variant_id: self.activeVariantId,
+                add_qty: qty,
+                designs: designs
+            }).then(function (result) {
+                if (result && result.success) {
+                    window.location.href = '/shop/cart';
+                } else {
+                    alert(result.error || 'Failed to add product to cart');
+                }
+            }).catch(function (error) {
+                console.error('Add to cart error:', error);
+                alert('Failed to add product to cart');
+            });
+        }
+    },
+
+    _generatePreviewForDesignType: function (designType) {
+        const self = this;
+
+        // Get saved data for this specific design type
+        const savedData = self.designData[designType];
+
+        if (!savedData || !savedData.objects || savedData.objects.length === 0) {
+            // Return design config image URL
+            const designConfig = self.productData.designs[designType];
+            return designConfig ? designConfig.image_url : self.productData.fallback_image_url;
+        }
+
+        try {
+            // Create temporary canvas for preview generation
+            const tempCanvas = new fabric.Canvas(document.createElement('canvas'));
+            tempCanvas.setWidth(800);
+            tempCanvas.setHeight(800);
+
+            // Load design config background for this type
+            const designConfig = self.productData.designs[designType];
+            const bgUrl = designConfig ? designConfig.image_url : self.productData.fallback_image_url;
+
+            return new Promise(function (resolve) {
+                if (bgUrl) {
+                    fabric.Image.fromURL(bgUrl, function (img) {
+                        if (img) {
+                            const w = tempCanvas.getWidth();
+                            const h = tempCanvas.getHeight();
+                            const scale = Math.min(w / img.width, h / img.height);
+
+                            img.set({
+                                left: (w - img.width * scale) / 2,
+                                top: (h - img.height * scale) / 2,
+                                scaleX: scale,
+                                scaleY: scale,
+                                selectable: false,
+                                evented: false
+                            });
+
+                            tempCanvas.setBackgroundImage(img, function () {
+                                loadObjects();
+                            });
+                        } else {
+                            loadObjects();
+                        }
+                    }, null, {
+                        crossOrigin: 'anonymous'
+                    });
+                } else {
+                    loadObjects();
+                }
+
+                function loadObjects() {
+                    tempCanvas.loadFromJSON(savedData, function () {
+                        const dataURL = tempCanvas.toDataURL({ format: 'png', quality: 0.8 });
+                        tempCanvas.dispose();
+                        resolve(dataURL);
+                    });
+                }
+            });
+
+        } catch (e) {
+            console.error('Preview generation failed:', e);
+            const designConfig = self.productData.designs[designType];
+            return designConfig ? designConfig.image_url : self.productData.fallback_image_url;
+        }
+    },
+
+    /* Layer list helpers */
+    _assignLayerId: function (obj) {
+        const self = this;
+        if (!obj) return;
+        if (!obj.__layerId) {
+            obj.__layerId = 'layer_' + (self._layerCounter++);
+        }
+        return obj.__layerId;
+    },
+
+    _assignLayerIds: function () {
+        const self = this;
+        const objs = self.fabricCanvas ? self.fabricCanvas.getObjects() : [];
+        objs.forEach(function (o) {
+            if (o && !o.isZoneRect && o.name !== 'zoneRect') {
+                self._assignLayerId(o);
+            }
         });
     },
 
+    _renderLayersList: function () {
+        const self = this;
+        const $list = self.$('#layers_list');
+        if (!$list || !$list.length) return;
+
+        // Ensure ids assigned
+        self._assignLayerIds();
+
+        // Build items: top-most object first
+        const objs = (self.fabricCanvas ? self.fabricCanvas.getObjects() : []).filter(function (o) {
+            return o && !o.isZoneRect && o.name !== 'zoneRect';
+        });
+
+        // Reverse to show top-first
+        const items = objs.slice().reverse();
+
+        $list.empty();
+
+        items.forEach(function (obj) {
+            const layerId = obj.__layerId;
+            const $item = $('<div class="layer-item d-flex align-items-center p-2" ' +
+                'data-layer-id="' + layerId + '" style="border-bottom:1px solid #eee; cursor:pointer;"></div>');
+
+            // Thumbnail
+            const $thumb = $('<div style="width:46px; height:46px; flex:0 0 46px; border:1px solid #ddd; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#fff; margin-right:8px;"></div>');
+            if (obj.type === 'image' && obj._element && obj._element.src) {
+                const $img = $('<img/>').attr('src', obj._element.src).css({ width: '100%', height: '100%', objectFit: 'cover' });
+                $thumb.append($img);
+            } else if (obj.type === 'i-text' || obj.type === 'text') {
+                const text = (obj.text || '').toString();
+                $thumb.append($('<div style="font-size:11px; padding:4px; text-align:center;">' + (text.length > 20 ? text.substr(0, 20) + '…' : text) + '</div>'));
+            } else {
+                // Shape: use shape icon (stored __label or type to pick icon)
+                const shapeType = obj.__label ? obj.__label.toLowerCase() : (obj.type || 'shape').toLowerCase();
+                let icon = 'fa-layer-group';
+                if (shapeType.indexOf('rect') >= 0) icon = 'fa-square';
+                else if (shapeType.indexOf('circle') >= 0 || shapeType.indexOf('ellipse') >= 0) icon = 'fa-circle';
+                else if (shapeType.indexOf('triangle') >= 0) icon = 'fa-play';
+                else if (shapeType.indexOf('star') >= 0) icon = 'fa-star';
+                else if (shapeType.indexOf('heart') >= 0) icon = 'fa-heart';
+                else if (shapeType.indexOf('diamond') >= 0) icon = 'fa-diamond';
+                else if (shapeType.indexOf('arrow') >= 0) icon = 'fa-arrow-right';
+                else if (shapeType.indexOf('pentagon') >= 0 || shapeType.indexOf('hexagon') >= 0) icon = 'fa-stop';
+                else if (shapeType.indexOf('line') >= 0) icon = 'fa-minus';
+                $thumb.append($('<i class="fa ' + icon + '" style="font-size:20px; color:#3b82f6;"></i>'));
+            }
+
+            // Label
+            let label = '';
+            if (obj.type === 'i-text' || obj.type === 'text') {
+                label = obj.text || 'Text';
+            } else if (obj.type === 'image') {
+                label = (obj._element && obj._element.name) ? obj._element.name : 'Image';
+            } else {
+                // For shapes, use stored __label if available, else use type
+                label = obj.__label || obj.type || 'Shape';
+            }
+
+            const $label = $('<div style="flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;"></div>').text(label);
+
+            // Controls (hidden by default, shown on hover)
+            const $controls = $('<div class="layer-controls btn-group" style="display:none; flex:0 0 auto; margin-left:8px; gap:2px;"></div>');
+            const $btnFront = $('<button class="btn btn-sm btn-outline-secondary" title="Bring to Front"><i class="fa fa-arrow-up"/></button>');
+            const $btnBack = $('<button class="btn btn-sm btn-outline-secondary" title="Send to Back"><i class="fa fa-arrow-down"/></button>');
+            const $btnDup = $('<button class="btn btn-sm btn-outline-secondary" title="Duplicate"><i class="fa fa-copy"/></button>');
+            const $btnLock = $('<button class="btn btn-sm btn-outline-secondary" title="Lock/Unlock"><i class="fa fa-lock"/></button>');
+            const $btnDel = $('<button class="btn btn-sm btn-outline-danger" title="Delete"><i class="fa fa-trash"/></button>');
+
+            $controls.append($btnFront, $btnBack, $btnDup, $btnLock, $btnDel);
+
+            $item.append($thumb, $label, $controls);
+
+            // hover show controls
+            $item.on('mouseenter', function () {
+                $controls.show();
+            }).on('mouseleave', function () {
+                $controls.hide();
+            });
+
+            // click selects object
+            $item.on('click', function (ev) {
+                ev.stopPropagation();
+                self.fabricCanvas.discardActiveObject();
+                self.fabricCanvas.setActiveObject(obj);
+                self.fabricCanvas.renderAll();
+                self._updateControls();
+                self._renderLayersList();
+            });
+
+            // control actions
+            $btnFront.on('click', function (ev) {
+                ev.stopPropagation();
+                self.fabricCanvas.bringToFront(obj);
+                self._ensureZoneOnTop();
+                self.fabricCanvas.renderAll();
+                self._renderLayersList();
+            });
+            $btnBack.on('click', function (ev) {
+                ev.stopPropagation();
+                self.fabricCanvas.sendToBack(obj);
+                self._ensureZoneOnTop();
+                self.fabricCanvas.renderAll();
+                self._renderLayersList();
+            });
+            $btnDup.on('click', function (ev) {
+                ev.stopPropagation();
+                obj.clone(function (cloned) {
+                    cloned.set({ left: cloned.left + 20, top: cloned.top + 20 });
+                    self.fabricCanvas.add(cloned);
+                    self.fabricCanvas.setActiveObject(cloned);
+                    self.fabricCanvas.renderAll();
+                });
+            });
+            $btnLock.on('click', function (ev) {
+                ev.stopPropagation();
+                const locked = !obj.lockMovementX;
+                obj.set({ lockMovementX: locked, lockMovementY: locked, lockRotation: locked, lockScalingX: locked, lockScalingY: locked });
+                self.fabricCanvas.renderAll();
+                self._renderLayersList();
+            });
+            $btnDel.on('click', function (ev) {
+                ev.stopPropagation();
+                self.fabricCanvas.remove(obj);
+                self.fabricCanvas.renderAll();
+                self._renderLayersList();
+            });
+
+            // mark selected
+            if (self.fabricCanvas.getActiveObject() === obj) {
+                $item.css('background', '#f1f5f9');
+            }
+
+            $list.append($item);
+        });
+    },
 });

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="leo_product_personalizer.DesignConfigurator" owl="1">
+        <div t-ref="container" class="design-image-container" style="position: relative; display: inline-block; line-height: 0; width: 128px; height: 128px;">
+            <img t-if="state.imageUrl" t-att-src="state.imageUrl" t-ref="image" class="img img-fluid" style="max-width: 100%; max-height: 100%;"/>
+            <div t-else="" class="o_field_image_placeholder bg-200" style="width: 100%; height: 100%;"/>
+            <t t-if="state.isRestricted">
+                <div t-ref="box" class="design-config-overlay" style="position: absolute; border: 2px dashed #007bff; cursor: move; box-sizing: border-box;">
+                    <div class="resizer top-left"/>
+                    <div class="resizer top-right"/>
+                    <div class="resizer bottom-left"/>
+                    <div class="resizer bottom-right"/>
+                    <div class="resizer top"/>
+                    <div class="resizer bottom"/>
+                    <div class="resizer left"/>
+                    <div class="resizer right"/>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>
+            </div>
+        </div>
+    </t>
+</templates>

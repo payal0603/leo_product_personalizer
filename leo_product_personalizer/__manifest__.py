@@ -18,18 +18,27 @@
         allowing easy tracking of customer-specific customizations.
         This module is ideal for eCommerce stores offering made-to-order or personalized products.
     """,
+    "author": "Leofren Technologies",
+    "website": "https://leofren.com",
     'depends': ['website_sale', 'product'],
     'data': [
         'security/ir.model.access.csv',
         'views/product_template_views.xml',
         'views/website_templates.xml',
+        'views/cart_templates.xml',
         'views/sale_order_line_personalization_views.xml',
         'views/sale_order_views.xml',
     ],
     'assets': {
+        'web.asset_backend': [
+            'leo_product_personalizer/static/src/js/design_area_widget.js',
+            'leo_product_personalizer/static/src/xml/design_area_widget.xml',
+            'https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js',
+        ],
         'web.assets_frontend': [
             'leo_product_personalizer/static/src/css/customizer.css',
             'leo_product_personalizer/static/src/js/product_customizer.js',
+            'leo_product_personalizer/static/src/js/cart_personalization.js',
             'https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js',
         ],
     },

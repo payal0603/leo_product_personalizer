@@ -7,7 +7,7 @@
         <field name="arch" type="xml">
             <xpath expr="//div[@name='options']" position="inside">
                 <span class="d-inline-flex" invisible="type == 'combo'">
-                    <field name="is_product_personalization" on_change="1"/>
+                    <field name="is_product_personalization"/>
                     <label for="is_product_personalization"/>
                 </span>
             </xpath>
@@ -35,17 +35,36 @@
                             <form>
                                 <sheet>
                                     <group>
-                                        <field name="design_type"/>
-                                        <field name="label" />
-                                        <div name="design_configurator_container" widget="design_configurator" class="o_field_image"/>
-                                        <field name="is_restricted_area" />
+                                        <group>
+                                            <field name="design_type" required="1"/>
+                                            <field name="label"/>
+                                        </group>
+                                        <group>
+                                            <field name="design_image" widget="image" class="oe_avatar"/>
+                                        </group>
                                     </group>
-                                    <group invisible="not is_restricted_area">
-                                        <field name="bound_x"/>
-                                        <field name="bound_y"/>
-                                        <field name="bound_width" />
-                                        <field name="bound_height" />
+                                    <group>
+                                        <field name="is_restricted_area"/>
                                     </group>
+                                    <notebook>
+                                        <page string="Restricted Area" invisible="not is_restricted_area">
+                                            <group>
+                                                <field name="design_image" invisible="1"/>
+                                                <field name="design_image" widget="design_area_widget" nolabel="1"/>
+                                            </group>
+                                            
+                                            <group string="Coordinates">
+                                                <group>
+                                                    <field name="bound_x" readonly="1"/>
+                                                    <field name="bound_y" readonly="1"/>
+                                                </group>
+                                                <group>
+                                                    <field name="bound_width" readonly="1"/>
+                                                    <field name="bound_height" readonly="1"/>
+                                                </group>
+                                            </group>
+                                        </page>
+                                    </notebook>
                                 </sheet>
                             </form>
                         </field>
@@ -54,5 +73,4 @@
             </xpath>
         </field>
     </record>
-
 </odoo>

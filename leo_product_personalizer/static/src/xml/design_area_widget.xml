@@ -1,25 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
-    <t t-name="leo_product_personalizer.DesignConfigurator" owl="1">
-        <div t-ref="container" class="design-image-container" style="position: relative; display: inline-block; line-height: 0; width: 128px; height: 128px;">
-            <img t-if="state.imageUrl" t-att-src="state.imageUrl" t-ref="image" class="img img-fluid" style="max-width: 100%; max-height: 100%;"/>
-            <div t-else="" class="o_field_image_placeholder bg-200" style="width: 100%; height: 100%;"/>
-            <t t-if="state.isRestricted">
-                <div t-ref="box" class="design-config-overlay" style="position: absolute; border: 2px dashed #007bff; cursor: move; box-sizing: border-box;">
-                    <div class="resizer top-left"/>
-                    <div class="resizer top-right"/>
-                    <div class="resizer bottom-left"/>
-                    <div class="resizer bottom-right"/>
-                    <div class="resizer top"/>
-                    <div class="resizer bottom"/>
-                    <div class="resizer left"/>
-                    <div class="resizer right"/>
+    <t t-name="leo_product_personalizer.DesignAreaWidget" owl="1">
+        <div class="o_design_area_widget">
+            <t t-if="state.hasImage and state.isRestricted">
+                <div class="alert alert-info mb-3">
+                    <i class="fa fa-info-circle"/> Drag and resize the blue rectangle to define the customization area.
+                </div>
+                <div class="text-center p-3">
+                    <canvas t-ref="canvas" 
+                            style="border: 2px solid #dee2e6; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"/>
                 </div>
             </t>
-        </div>
-    </t>
-</templates>
-            </div>
+            <t t-if="!state.hasImage">
+                <div class="alert alert-warning">
+                    <i class="fa fa-exclamation-triangle"/> Please upload a design image first.
+                </div>
+            </t>            
+            <t t-if="state.hasImage and !state.isRestricted">
+                <div class="alert alert-info">
+                    <i class="fa fa-info-circle"/> Enable "Has Restricted Area" to use the zone selector.
+                </div>
+            </t>
         </div>
     </t>
 </templates>

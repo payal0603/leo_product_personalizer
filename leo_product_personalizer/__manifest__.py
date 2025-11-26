@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-# Part of Odoo. See LICENSE file for full copyright and licensing details.
 {
     'name': 'Product Personalization Editor',
     'version': '1.0',
@@ -30,7 +28,7 @@
         'views/sale_order_views.xml',
     ],
     'assets': {
-        'web.asset_backend': [
+        'web.assets_backend': [
             'leo_product_personalizer/static/src/js/design_area_widget.js',
             'leo_product_personalizer/static/src/xml/design_area_widget.xml',
             'https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js',

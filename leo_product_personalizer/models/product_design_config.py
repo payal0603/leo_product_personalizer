@@ -36,8 +36,7 @@ class ProductDesignConfig(models.Model):
         required=True,
         help="Identifier for the design side (e.g. front, back)",
     )
-    label = fields.Char(string="Label", help="Friendly label shown in selector")
-    design_image = fields.Image("Side Image")
+    design_image = fields.Image("Image")
 
     is_restricted_area = fields.Boolean(
         "Has Restricted Area",

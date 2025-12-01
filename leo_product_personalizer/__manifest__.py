@@ -22,6 +22,7 @@
     'data': [
         'security/ir.model.access.csv',
         'views/product_template_views.xml',
+        'views/product_personalized_preview_template.xml',
         'views/website_templates.xml',
         'views/cart_templates.xml',
         'views/sale_order_line_personalization_views.xml',

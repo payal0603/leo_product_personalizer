@@ -39,6 +39,10 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         'change #product_qty': '_onChangeQty',
         'change #variant_selector': '_onVariantChange',
         'click .menu-item': '_onMenuItemClick',
+        // Preview & Download
+        'click #preview_designs_button': '_onClickPreviewDesigns',
+        'click #download_designs_button': '_onClickDownloadDesigns',
+        'click .download-format-btn': '_onClickDownloadFormat',
     },
 
     start: function () {
@@ -94,9 +98,24 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                 self.designData = result.designs;
                 Object.keys(self.designData).forEach(function (designType) {
                     const design = self.designData[designType];
-                    if (design.json && typeof design.json === 'string') {
+
+                    // Parse personalized_json field to get actual canvas JSON
+                    if (design.personalized_json && typeof design.personalized_json === 'string') {
+                        try {
+                            design.json = JSON.parse(design.personalized_json);
+                        } catch (e) {
+                            console.error('Failed to parse personalized_json:', e);
+                            design.json = { version: "5.3.0", objects: [] };
+                        }
+                    } else if (design.personalized_json && typeof design.personalized_json === 'object') {
+                        design.json = design.personalized_json;
+                    } else if (design.json && typeof design.json === 'string') {
                         design.json = JSON.parse(design.json);
+                    } else {
+                        design.json = { version: "5.3.0", objects: [] };
                     }
+
+                    // Store the preview image URL
                     if (design.product_image_url) {
                         design.backgroundImageUrl = design.product_image_url;
                     }
@@ -279,7 +298,7 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                 } else if (e.key === 'y') {
                     e.preventDefault();
                     self._onClickRedo();
-                } 
+                }
             }
         });
     },
@@ -287,7 +306,7 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
     _loadProductData: function () {
         const self = this;
         self.productId = parseInt(self.$('#product_id').val());
-        
+
         // In edit mode, use the stored variant ID
         const variantIdParam = self.editMode && self.editVariantId ? self.editVariantId : null;
 
@@ -311,7 +330,7 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
 
     _onVariantChange: function (ev) {
         const self = this;
-        
+
         if (self.editMode) {
             ev.preventDefault();
             alert('Cannot change variant while editing an existing design');
@@ -783,17 +802,22 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         try {
             if (!self.activeDesignType) return;
 
-            const canvasJSON = self.fabricCanvas.toJSON();
+            const objs = self.fabricCanvas.getObjects().filter(function (obj) {
+                return !obj.isZoneRect && obj.name !== 'zoneRect';
+            });
 
-            // Filter out zone rectangles
-            if (canvasJSON.objects) {
-                canvasJSON.objects = canvasJSON.objects.filter(function (obj) {
-                    return !obj.isZoneRect && obj.name !== 'zoneRect';
-                });
+            const canvasJSON = {
+                version: "5.3.0",
+                objects: objs.map(function (obj) {
+                    return obj.toObject();
+                })
+            };
+
+            if (!self.designData[self.activeDesignType]) {
+                self.designData[self.activeDesignType] = {};
             }
 
-            // Save ONLY for current design type
-            self.designData[self.activeDesignType] = canvasJSON;
+            self.designData[self.activeDesignType].json = canvasJSON;
 
         } catch (e) {
             console.error('Could not save current canvas JSON', e);
@@ -812,28 +836,13 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         const side = designs[designType];
         const savedDesignData = self.designData[designType];
 
-        if (!side && !savedDesignData) {
-            if (self.productData && self.productData.fallback_image_url) {
-                self._setBackgroundFromUrl(self.productData.fallback_image_url, function () {
-                    self._restoreSavedJson(designType);
-                });
-            } else {
-                self.fabricCanvas.setBackgroundImage(null, self.fabricCanvas.renderAll.bind(self.fabricCanvas));
-                self._restoreSavedJson(designType);
-            }
-            return;
-        }
-
-        // In edit mode, prefer the saved background image URL over the design config image
         let backgroundUrl = null;
-        if (self.editMode && savedDesignData && savedDesignData.backgroundImageUrl) {
-            backgroundUrl = savedDesignData.backgroundImageUrl;
-        } else if (side && side.image_url) {
+        if (side && side.image_url) {
             backgroundUrl = side.image_url;
         } else if (self.productData && self.productData.fallback_image_url) {
             backgroundUrl = self.productData.fallback_image_url;
         }
-        debugger;
+
         if (backgroundUrl) {
             self._setBackgroundFromUrl(backgroundUrl, function () {
                 if (side && side.is_restricted_area) {
@@ -844,10 +853,8 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                         height: parseFloat(side.bound_height || side.height) || 0
                     };
                     self._setZone(zoneData);
-                    self._restoreSavedJson(designType);
-                } else {
-                    self._restoreSavedJson(designType);
                 }
+                self._restoreSavedJson(designType);
             });
         } else {
             self.fabricCanvas.setBackgroundImage(null, self.fabricCanvas.renderAll.bind(self.fabricCanvas));
@@ -859,20 +866,18 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                     height: parseFloat(side.bound_height || side.height) || 0
                 };
                 self._setZone(zoneData);
-                self._restoreSavedJson(designType);
-            } else {
-                self._restoreSavedJson(designType);
             }
+            self._restoreSavedJson(designType);
         }
     },
 
     _setBackgroundFromUrl: function (url, callback) {
         const self = this;
-        
+
         fabric.Image.fromURL(url, function (img) {
             if (!img) {
                 console.warn('Failed to load image from URL:', url, '- retrying with absolute path');
-                
+
                 // If URL is relative, try with absolute path
                 if (url && url.startsWith('/')) {
                     const absoluteUrl = window.location.origin + url;
@@ -902,7 +907,7 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
 
     _applyBackgroundImage: function (img) {
         const self = this;
-        
+
         img.set({
             selectable: false,
             evented: false
@@ -916,17 +921,15 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         img.top = (h - img.height * scale) / 2;
         img.scaleX = scale;
         img.scaleY = scale;
-
         self.fabricCanvas.setBackgroundImage(img, self.fabricCanvas.renderAll.bind(self.fabricCanvas));
     },
 
     _restoreSavedJson: function (designType) {
         const self = this;
-
         self.isUndoRedoAction = true;
 
         try {
-            // Remove all user objects (keep background and zone)
+            // Remove existing objects (keep background and zone)
             const objs = self.fabricCanvas.getObjects().slice();
             for (let i = 0; i < objs.length; i++) {
                 const o = objs[i];
@@ -934,32 +937,34 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                 self.fabricCanvas.remove(o);
             }
 
-            // Load ONLY the saved data for THIS specific design type
             const savedForThisType = self.designData[designType];
 
-            if (savedForThisType) {
-                let jsonToLoad = savedForThisType;
+            if (savedForThisType && savedForThisType.json) {
+                let jsonToLoad = savedForThisType.json;
 
                 if (typeof jsonToLoad === 'string') {
                     jsonToLoad = JSON.parse(jsonToLoad);
                 }
 
-                // Ensure no zone rectangles in saved data
-                if (jsonToLoad.objects) {
-                    jsonToLoad.objects = jsonToLoad.objects.filter(function (obj) {
+                // Only restore objects array, nothing else
+                const objectsOnly = {
+                    version: jsonToLoad.version || "5.3.0",
+                    objects: (jsonToLoad.objects || []).filter(function (obj) {
                         return obj.isZoneRect !== true && obj.name !== 'zoneRect';
-                    });
-                }
+                    })
+                };
 
-                self.fabricCanvas.loadFromJSON(jsonToLoad, function () {
-                    // Ensure zone stays on top after loading
+                fabric.util.enlivenObjects(objectsOnly.objects, function (enlivenedObjects) {
+                    enlivenedObjects.forEach(function (obj) {
+                        self.fabricCanvas.add(obj);
+                    });
+
                     if (self.zoneRect) {
                         self.fabricCanvas.bringToFront(self.zoneRect);
                     }
                     self.fabricCanvas.renderAll();
-                    // assign stable layer ids and update layers UI
-                    try { self._assignLayerIds(); } catch (e) { }
-                    try { self._renderLayersList(); } catch (e) { }
+                    self._assignLayerIds();
+                    self._renderLayersList();
                     self.isUndoRedoAction = false;
 
                     // Initialize history for this design type
@@ -970,13 +975,10 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                     }, 100);
                 });
             } else {
-                // No saved data for this design type - start fresh
                 if (self.zoneRect) {
                     self.fabricCanvas.bringToFront(self.zoneRect);
                 }
                 self.fabricCanvas.renderAll();
-                try { self._assignLayerIds(); } catch (e) { }
-                try { self._renderLayersList(); } catch (e) { }
                 self.isUndoRedoAction = false;
 
                 // Initialize history
@@ -1166,33 +1168,28 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         for (const dt of allDesignTypes) {
             let canvasJSON, previewURL;
 
-            if (self.designData[dt] && self.designData[dt].objects && self.designData[dt].objects.length > 0) {
-                // User customized this design type
-                canvasJSON = self.designData[dt];
+            if (self.designData[dt] && self.designData[dt].json && self.designData[dt].json.objects && self.designData[dt].json.objects.length > 0) {
+                // User customized - save their work
+                canvasJSON = self.designData[dt].json;
                 previewURL = await self._generatePreviewForDesignType(dt);
             } else {
-                // Use original design config image
+                // Not customized - save empty objects with original image
                 const designConfig = self.productData.designs[dt];
                 previewURL = designConfig ? designConfig.image_url : self.productData.fallback_image_url;
                 canvasJSON = { version: "5.3.0", objects: [] };
             }
 
-            const filteredJSON = {
-                ...canvasJSON,
-                objects: (canvasJSON.objects || []).filter(obj => !obj.isZoneRect && obj.name !== 'zoneRect')
-            };
-
             designs[dt] = {
-                json: JSON.stringify(filteredJSON),
+                json: JSON.stringify(canvasJSON),
                 preview: previewURL,
             };
         }
 
-        const qty = self.editMode ? 1 : (parseInt(self.$('#product_qty').val()) || 1);
-
+        const qty = parseInt(self.$('#product_qty').val() || 1);
         if (self.editMode && self.editLineId) {
             rpc('/shop/cart/update_line_personalization', {
                 line_id: self.editLineId,
+                add_qty: qty,
                 designs: designs
             }).then(function (result) {
                 if (result && result.success) {
@@ -1224,27 +1221,37 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
 
     _generatePreviewForDesignType: function (designType) {
         const self = this;
-
-        // Get saved data for this specific design type
         const savedData = self.designData[designType];
 
-        if (!savedData || !savedData.objects || savedData.objects.length === 0) {
-            // Return design config image URL
+        // If no customization, return design config image
+        if (!savedData || !savedData.json || !savedData.json.objects || savedData.json.objects.length === 0) {
             const designConfig = self.productData.designs[designType];
-            return designConfig ? designConfig.image_url : self.productData.fallback_image_url;
+            return Promise.resolve(designConfig ? designConfig.image_url : self.productData.fallback_image_url);
         }
 
+        // Has customization - generate preview with background + objects
         try {
-            // Create temporary canvas for preview generation
             const tempCanvas = new fabric.Canvas(document.createElement('canvas'));
             tempCanvas.setWidth(800);
             tempCanvas.setHeight(800);
 
-            // Load design config background for this type
             const designConfig = self.productData.designs[designType];
             const bgUrl = designConfig ? designConfig.image_url : self.productData.fallback_image_url;
 
             return new Promise(function (resolve) {
+                function loadObjects() {
+                    fabric.util.enlivenObjects(savedData.json.objects || [], function (enlivenedObjects) {
+                        enlivenedObjects.forEach(function (obj) {
+                            tempCanvas.add(obj);
+                        });
+
+                        tempCanvas.renderAll();
+                        const dataURL = tempCanvas.toDataURL({ format: 'png', quality: 0.8 });
+                        tempCanvas.dispose();
+                        resolve(dataURL);
+                    });
+                }
+
                 if (bgUrl) {
                     fabric.Image.fromURL(bgUrl, function (img) {
                         if (img) {
@@ -1261,32 +1268,20 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                                 evented: false
                             });
 
-                            tempCanvas.setBackgroundImage(img, function () {
-                                loadObjects();
-                            });
+                            tempCanvas.setBackgroundImage(img, loadObjects);
                         } else {
                             loadObjects();
                         }
-                    }, null, {
-                        crossOrigin: 'anonymous'
-                    });
+                    }, null, { crossOrigin: 'anonymous' });
                 } else {
                     loadObjects();
-                }
-
-                function loadObjects() {
-                    tempCanvas.loadFromJSON(savedData, function () {
-                        const dataURL = tempCanvas.toDataURL({ format: 'png', quality: 0.8 });
-                        tempCanvas.dispose();
-                        resolve(dataURL);
-                    });
                 }
             });
 
         } catch (e) {
             console.error('Preview generation failed:', e);
             const designConfig = self.productData.designs[designType];
-            return designConfig ? designConfig.image_url : self.productData.fallback_image_url;
+            return Promise.resolve(designConfig ? designConfig.image_url : self.productData.fallback_image_url);
         }
     },
 
@@ -1443,6 +1438,181 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
             }
 
             $list.append($item);
+        });
+    },
+
+    // Preview and Download
+    _onClickPreviewDesigns: function () {
+        const self = this;
+        self._saveCurrentSideState();
+        // Generate previews
+        const $grid = $('#preview_grid');
+        $grid.empty();
+
+        const allDesignTypes = self.productData.design_types || [];
+
+        const previewPromises = allDesignTypes.map(function (designType) {
+            return self._generatePreviewForDesignType(designType).then(function (previewUrl) {
+                const label = designType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+                const $col = $('<div class="col-12 col-md-6 mb-3"></div>');
+                const $card = $('<div class="card h-100"></div>');
+                const $cardBody = $('<div class="card-body d-flex flex-column"></div>');
+
+                $cardBody.append('<strong class="card-title mb-2">' + label + '</strong>');
+
+                const $imgWrapper = $('<div class="flex-fill d-flex align-items-center justify-content-center" style="height: 500px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;"></div>');
+                const $img = $('<img class="img-fluid rounded" style="max-height: 100%; max-width: 100%; object-fit: contain;"/>').attr('src', previewUrl);
+
+                $imgWrapper.append($img);
+                $cardBody.append($imgWrapper);
+                $card.append($cardBody);
+                $col.append($card);
+
+                return $col;
+            });
+        });
+
+        Promise.all(previewPromises).then(function (columns) {
+            columns.forEach(function ($col) {
+                $grid.append($col);
+            });
+
+            $('#preview_personalization_modal').modal('show');
+        }).catch(function (error) {
+            console.error('Error generating previews:', error);
+            alert('Failed to generate previews');
+        });
+    },
+
+    _onClickDownloadDesigns: function () {
+        const self = this;
+        self._saveCurrentSideState();
+        // Generate previews for download modal
+        const $grid = $('#download_preview_grid');
+        $grid.empty();
+
+        const allDesignTypes = self.productData.design_types || [];
+
+        const previewPromises = allDesignTypes.map(function (designType) {
+            return self._generatePreviewForDesignType(designType).then(function (previewUrl) {
+                const label = designType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+                const $col = $('<div class="col-12 col-md-6 mb-3"></div>');
+                const $card = $('<div class="card h-100"></div>');
+                const $cardBody = $('<div class="card-body d-flex flex-column"></div>');
+
+                $cardBody.append('<strong class="card-title mb-2">' + label + '</strong>');
+
+                const $imgWrapper = $('<div class="flex-fill d-flex align-items-center justify-content-center" style="height: 500px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;"></div>');
+                const $img = $('<img class="img-fluid rounded" style="max-height: 100%; max-width: 100%; object-fit: contain;"/>').attr('src', previewUrl).attr('data-design-type', designType);
+
+                $imgWrapper.append($img);
+                $cardBody.append($imgWrapper);
+                $card.append($cardBody);
+                $col.append($card);
+
+                return $col;
+            });
+        });
+
+        Promise.all(previewPromises).then(function (columns) {
+            columns.forEach(function ($col) {
+                $grid.append($col);
+            });
+
+            $('#download_personalization_modal').modal('show');
+        }).catch(function (error) {
+            console.error('Error generating download previews:', error);
+            alert('Failed to generate previews');
+        });
+    },
+
+    _onClickDownloadFormat: function (ev) {
+        const self = this;
+        const format = $(ev.currentTarget).data('format');
+
+        if (!format) {
+            alert('Invalid format');
+            return;
+        }
+
+        // Visual feedback
+        $(ev.currentTarget).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Downloading...');
+
+        const allDesignTypes = self.productData.design_types || [];
+        let downloadCount = 0;
+        const totalDownloads = allDesignTypes.length;
+
+        allDesignTypes.forEach(function (designType, index) {
+            self._generatePreviewForDesignType(designType).then(function (previewUrl) {
+                self._downloadImageAs(previewUrl, designType, format).then(function () {
+                    downloadCount++;
+
+                    // Close modal and reset button when all downloads complete
+                    if (downloadCount === totalDownloads) {
+                        setTimeout(function () {
+                            $('#download_personalization_modal').modal('hide');
+                            $('.download-format-btn').prop('disabled', false).each(function () {
+                                const fmt = $(this).data('format');
+                                let label = 'PNG';
+                                if (fmt === 'jpeg') label = 'JPG';
+                                else if (fmt === 'webp') label = 'WebP';
+                                $(this).html('<i class="fa fa-file-image-o fa-2x d-block mb-2"></i>Download as ' + label);
+                            });
+                        }, 300);
+                    }
+                });
+            });
+        });
+    },
+
+    _downloadImageAs: function (imageUrl, designType, format) {
+        return new Promise(function (resolve, reject) {
+            const tempCanvas = document.createElement('canvas');
+            const tempImg = new Image();
+
+            tempImg.onload = function () {
+                tempCanvas.width = tempImg.width;
+                tempCanvas.height = tempImg.height;
+
+                const ctx = tempCanvas.getContext('2d');
+                ctx.drawImage(tempImg, 0, 0);
+
+                // Convert to selected format
+                let mimeType = 'image/png';
+                let extension = 'png';
+
+                if (format === 'jpeg') {
+                    mimeType = 'image/jpeg';
+                    extension = 'jpg';
+                } else if (format === 'webp') {
+                    mimeType = 'image/webp';
+                    extension = 'webp';
+                }
+
+                tempCanvas.toBlob(function (blob) {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    const fileName = designType.replace(/_/g, '-') + '.' + extension;
+
+                    link.href = url;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+
+                    resolve();
+                }, mimeType, 0.95);
+            };
+
+            tempImg.onerror = function () {
+                reject(new Error('Failed to load image'));
+            };
+
+            tempImg.crossOrigin = 'anonymous';
+            tempImg.src = imageUrl;
         });
     },
 });

@@ -2,23 +2,25 @@
 <templates xml:space="preserve">
     <t t-name="leo_product_personalizer.DesignAreaWidget" owl="1">
         <div class="o_design_area_widget">
-            <t t-if="state.hasImage and state.isRestricted">
-                <div class="alert alert-info mb-3">
-                    <i class="fa fa-info-circle"/> Drag and resize the blue rectangle to define the customization area.
-                </div>
-                <div class="text-center p-3">
-                    <canvas t-ref="canvas" 
-                            style="border: 2px solid #dee2e6; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"/>
-                </div>
-            </t>
             <t t-if="!state.hasImage">
                 <div class="alert alert-warning">
                     <i class="fa fa-exclamation-triangle"/> Please upload a design image first.
                 </div>
-            </t>            
-            <t t-if="state.hasImage and !state.isRestricted">
+            </t>
+            
+            <t t-elif="!state.isRestricted">
                 <div class="alert alert-info">
-                    <i class="fa fa-info-circle"/> Enable "Has Restricted Area" to use the zone selector.
+                    <i class="fa fa-info-circle"/> Enable "Has Restricted Area" to define the customization zone.
+                </div>
+            </t>
+            
+            <t t-else="">
+                <div class="alert alert-info mb-3">
+                    <i class="fa fa-info-circle"/> <strong>Drag and resize</strong> the blue rectangle to define the customization area where customers can add their designs.
+                </div>
+                <div class="text-center p-3">
+                    <canvas t-ref="canvas" 
+                            style="border: 2px solid #dee2e6; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"/>
                 </div>
             </t>
         </div>

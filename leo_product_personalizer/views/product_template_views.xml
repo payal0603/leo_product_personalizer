@@ -13,7 +13,7 @@
             </xpath>
         </field>
     </record>
-
+    
     <record id="product_normal_form_view_personalization" model="ir.ui.view">
         <field name="name">product.product.form.personalization</field>
         <field name="model">product.product</field>
@@ -25,7 +25,6 @@
                         <field name="design_config_ids" nolabel="1">
                             <list>
                                 <field name="design_type"/>
-                                <field name="label"/>
                                 <field name="is_restricted_area"/>
                                 <field name="bound_x"/>
                                 <field name="bound_y"/>
@@ -37,7 +36,6 @@
                                     <group>
                                         <group>
                                             <field name="design_type" required="1"/>
-                                            <field name="label"/>
                                         </group>
                                         <group>
                                             <field name="design_image" widget="image" class="oe_avatar"/>
@@ -52,15 +50,14 @@
                                                 <field name="design_image" invisible="1"/>
                                                 <field name="design_image" widget="design_area_widget" nolabel="1"/>
                                             </group>
-                                            
                                             <group string="Coordinates">
                                                 <group>
-                                                    <field name="bound_x" readonly="1"/>
-                                                    <field name="bound_y" readonly="1"/>
+                                                    <field name="bound_x"/>
+                                                    <field name="bound_y"/>
                                                 </group>
                                                 <group>
-                                                    <field name="bound_width" readonly="1"/>
-                                                    <field name="bound_height" readonly="1"/>
+                                                    <field name="bound_width"/>
+                                                    <field name="bound_height"/>
                                                 </group>
                                             </group>
                                         </page>

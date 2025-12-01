@@ -16,11 +16,36 @@
         <t t-call="website.layout">
             <div id="wrap" class="o_product_personalize_page" t-att-data-product-id="product.id" style="position: relative;">
                 <div style="position: absolute; top: 20px; right: 10px; z-index: 1050;
-                    display: flex; flex-direction: column; gap: 8px;">                                    
+                    display: flex; flex-direction: column; gap: 8px;">   
+                    
+                    <button type="button" id="preview_designs_button"
+                        class="btn btn-info d-flex align-items-center"
+                        style="height: 48px;">
+                        <i class="fa fa-eye" style="margin-right:5px;"></i>
+                        Preview Designs
+                    </button>
+                    
+                    <button type="button" id="download_designs_button"
+                        class="btn btn-success d-flex align-items-center"
+                        style="height: 48px;">
+                        <i class="fa fa-download" style="margin-right:5px;"></i>
+                        Download Designs
+                    </button> 
+
+                    <div class="form-group mb-3">
+                        <label><strong>Quantity</strong></label>
+                        <t t-if="edit_mode">
+                            <t t-set="line" t-value="env['sale.order.line'].sudo().browse(line_id)"/>
+                        </t>
+                        <input type="number" id="product_qty" class="form-control" min="1" 
+                            t-att-value="line.product_uom_qty if edit_mode else 1"/>
+                    </div>
                     <button type="button" id="add_to_cart_personalized"
                         class="btn btn-primary d-flex align-items-center"
                         style="height: 48px;">
-                        <i class="fa fa-shopping-cart" style="margin-right:5px;" ></i> Add to Cart
+                        <i class="fa fa-shopping-cart" style="margin-right:5px;"></i>
+                        <t t-if="edit_mode">Update Design</t>
+                        <t t-else="">Add to Cart</t>
                     </button>
                     <a t-attf-href="/shop/product/#{product.id}"
                         class="btn btn-outline-secondary d-flex align-items-center"
@@ -39,10 +64,6 @@
                                     <i class="fa fa-cube" style="font-size: 24px;"/>
                                     <span style="font-size: 10px; margin-top: 4px;">Variant</span>
                                 </div>
-                                <div class="menu-item" data-menu="design" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
-                                    <i class="fa fa-layer-group" style="font-size: 24px;"/>
-                                    <span style="font-size: 10px; margin-top: 4px;">Design</span>
-                                </div>
                                 <div class="menu-item" data-menu="text" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
                                     <i class="fa fa-font" style="font-size: 24px;"/>
                                     <span style="font-size: 10px; margin-top: 4px;">Text</span>
@@ -52,18 +73,25 @@
                                     <span style="font-size: 10px; margin-top: 4px;">Image</span>
                                 </div>
                                 <div class="menu-item" data-menu="shape" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
-                                    <i class="fas" style="font-size: 24px;">&#xf61f;</i>
+                                    <i class="fas fa-shapes" style="font-size: 24px;"/>
+                                    <svg viewBox="0 0 512 512" fill="currentColor">
+                                        <path d="...svg path here..."/>
+                                    </svg>
+                                    <!-- <img src="/leo_product_personalizer/static/description/img/elements.png" height="30px"/> -->
                                     <span style="font-size: 10px; margin-top: 4px;">Shapes</span>
                                 </div>
                                 <div class="menu-item" data-menu="layers" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
-                                    <i class="fas fa-list" style="font-size: 24px;" />
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-stack" viewBox="0 0 16 16">
+                                        <path d="m14.12 10.163 1.715.858c.22.11.22.424 0 .534L8.267 15.34a.6.6 0 0 1-.534 0L.165 11.555a.299.299 0 0 1 0-.534l1.716-.858 5.317 2.659c.505.252 1.1.252 1.604 0l5.317-2.66zM7.733.063a.6.6 0 0 1 .534 0l7.568 3.784a.3.3 0 0 1 0 .535L8.267 8.165a.6.6 0 0 1-.534 0L.165 4.382a.299.299 0 0 1 0-.535z"/>
+                                        <path d="m14.12 6.576 1.715.858c.22.11.22.424 0 .534l-7.568 3.784a.6.6 0 0 1-.534 0L.165 7.968a.299.299 0 0 1 0-.534l1.716-.858 5.317 2.659c.505.252 1.1.252 1.604 0z"/>
+                                    </svg>
                                     <span style="font-size: 10px; margin-top: 4px;">Layers</span>
                                 </div>
                             </div>
 
                             <!-- Right Panel Content -->
                             <div style="flex: 1; padding: 20px; overflow-y: auto; position: relative;">
-                                <div style="position: sticky; top: 20px; z-index: 50; background: transparent; padding-bottom: 12px;">
+                                <div style="position: sticky; top: 20px; z-index: 50; background: transparent; padding-bottom: 25px;">
                                     <div class="btn-group w-100 mb-3" role="group" style="display: flex; gap:6px;">
                                         <button id="undo_button" class="btn btn-outline-secondary btn-sm" title="Undo (Ctrl+Z)">
                                             <i class="fa fa-undo"/>
@@ -72,32 +100,23 @@
                                             <i class="fa fa-repeat"/>
                                         </button>
                                     </div>
+                                    <hr/>
+                                    <div class="mb-4 d-flex align-items-center">
+                                        <h5 class="me-3 mb-0">Select Design:</h5>
+                                        <select id="design_type_selector" class="form-select form-select-lg w-auto rounded">
+                                            <option value="">Select Area</option>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <!-- Variant Panel -->
                                 <div id="variant_panel" class="menu-panel">
                                     <h5 class="mb-3">Select Variant</h5>
                                     <div class="form-group mb-3">
-                                        <select id="variant_selector" class="form-control">
-                                            <!-- options populated by JS -->
+                                        <!-- <select id="variant_selector" class="form-control" t-att-disabled="'disabled' if edit_mode else None">
                                             <option value="">Select Variant</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <!-- Design Side Panel -->
-                                <div id="design_panel" class="menu-panel" style="display: none; margin-top: 10px;">
-                                    <h5 class="mb-3">Design Side</h5>
-                                    <div class="form-group mb-3">
-                                        <label><strong>Select Design Side</strong></label>
-                                        <select id="design_type_selector" class="form-control mb-3">
-                                            <option value="">Select Area</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="form-group mb-3">
-                                        <label><strong>Quantity</strong></label>
-                                        <input type="number" id="product_qty" class="form-control" min="1" value="1"/>
+                                        </select> -->
+                                        <div id="variant_grid" class="variant-grid"></div>
                                     </div>
                                 </div>
 
@@ -261,6 +280,8 @@
                     </div>
                 </div>
             </div>
+            <!-- <t t-call="leo_product_personalizer.personalization_preview_modal"/>
+            <t t-call="leo_product_personalizer.personalization_download_modal"/> -->
         </t>
     </template>
 </odoo>

@@ -73,25 +73,28 @@
                                     <span style="font-size: 10px; margin-top: 4px;">Image</span>
                                 </div>
                                 <div class="menu-item" data-menu="shape" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
-                                    <i class="fas fa-shapes" style="font-size: 24px;"/>
-                                    <svg viewBox="0 0 512 512" fill="currentColor">
-                                        <path d="...svg path here..."/>
+                                    <svg width="24" height="24" fill="currentColor" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M128,256A128,128,0,1,0,256,384,128,128,0,0,0,128,256Zm379-54.86L400.07,18.29a37.26,37.26,0,0,0-64.14,
+                                        0L229,201.14C214.76,225.52,232.58,256,261.09,256H474.91C503.42,256,521.24,225.52,507,201.14ZM480,288H320a32,32,
+                                        0,0,0-32,32V480a32,32,0,0,0,32,32H480a32,32,0,0,0,32-32V320A32,32,0,0,0,480,288Z"></path>
                                     </svg>
-                                    <!-- <img src="/leo_product_personalizer/static/description/img/elements.png" height="30px"/> -->
                                     <span style="font-size: 10px; margin-top: 4px;">Shapes</span>
                                 </div>
                                 <div class="menu-item" data-menu="layers" style="width: 60px; height: 60px; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; color: #a0aec0;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-stack" viewBox="0 0 16 16">
-                                        <path d="m14.12 10.163 1.715.858c.22.11.22.424 0 .534L8.267 15.34a.6.6 0 0 1-.534 0L.165 11.555a.299.299 0 0 1 0-.534l1.716-.858 5.317 2.659c.505.252 1.1.252 1.604 0l5.317-2.66zM7.733.063a.6.6 0 0 1 .534 0l7.568 3.784a.3.3 0 0 1 0 .535L8.267 8.165a.6.6 0 0 1-.534 0L.165 4.382a.299.299 0 0 1 0-.535z"/>
-                                        <path d="m14.12 6.576 1.715.858c.22.11.22.424 0 .534l-7.568 3.784a.6.6 0 0 1-.534 0L.165 7.968a.299.299 0 0 1 0-.534l1.716-.858 5.317 2.659c.505.252 1.1.252 1.604 0z"/>
+                                        <path d="m14.12 10.163 1.715.858c.22.11.22.424 0 .534L8.267 15.34a.6.6 0 0 1-.534 0L.165 11.555a.299.299 0 0 1 
+                                        0-.534l1.716-.858 5.317 2.659c.505.252 1.1.252 1.604 0l5.317-2.66zM7.733.063a.6.6 0 0 1 .534 0l7.568 3.784a.3.3 
+                                        0 0 1 0 .535L8.267 8.165a.6.6 0 0 1-.534 0L.165 4.382a.299.299 0 0 1 0-.535z"/>
+                                        <path d="m14.12 6.576 1.715.858c.22.11.22.424 0 .534l-7.568 3.784a.6.6 0 0 1-.534 0L.165 7.968a.299.299 0 0 1 
+                                        0-.534l1.716-.858 5.317 2.659c.505.252 1.1.252 1.604 0z"/>
                                     </svg>
                                     <span style="font-size: 10px; margin-top: 4px;">Layers</span>
                                 </div>
                             </div>
 
                             <!-- Right Panel Content -->
-                            <div style="flex: 1; padding: 20px; overflow-y: auto; position: relative;">
-                                <div style="position: sticky; top: 20px; z-index: 50; background: transparent; padding-bottom: 25px;">
+                            <div style="flex: 1; padding: 20px; overflow: hidden; position: relative; display: flex; flex-direction: column;">
+                                <div style="position: sticky; top: 0; z-index: 50; background: #f8f9fa; padding-bottom: 15px; flex-shrink: 0;">
                                     <div class="btn-group w-100 mb-3" role="group" style="display: flex; gap:6px;">
                                         <button id="undo_button" class="btn btn-outline-secondary btn-sm" title="Undo (Ctrl+Z)">
                                             <i class="fa fa-undo"/>
@@ -109,14 +112,14 @@
                                     </div>
                                 </div>
 
-                                <!-- Variant Panel -->
+                                <!-- Panels Container - This scrolls independently -->
+                                <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                                    <!-- Variant Panel -->
+
                                 <div id="variant_panel" class="menu-panel">
                                     <h5 class="mb-3">Select Variant</h5>
-                                    <div class="form-group mb-3">
-                                        <!-- <select id="variant_selector" class="form-control" t-att-disabled="'disabled' if edit_mode else None">
-                                            <option value="">Select Variant</option>
-                                        </select> -->
-                                        <div id="variant_grid" class="variant-grid"></div>
+                                    <div id="variants_grid" class="row g-2">
+                                        <!-- Populated by JS with variant images in 2 columns -->
                                     </div>
                                 </div>
 
@@ -128,74 +131,94 @@
                                     </div>
                                     <button id="add_text_button" class="btn btn-primary w-100 mb-3"><i class="fa fa-plus"/> Add Text</button>
                                     
+                                    <!-- Text Edit Sub-Menus (shown when text is selected) -->
                                     <div id="text_controls" style="display: none;">
-                                        <div class="form-group mb-2">
-                                            <label class="small">Font Family</label>
-                                            <select id="text_font_family" class="form-control">
-                                                <option value="Arial">Arial</option>
-                                                <option value="Helvetica">Helvetica</option>
-                                                <option value="Times New Roman">Times New Roman</option>
-                                                <option value="Courier New">Courier New</option>
-                                                <option value="Verdana">Verdana</option>
-                                                <option value="Georgia">Georgia</option>
-                                                <option value="Palatino">Palatino</option>
-                                                <option value="Garamond">Garamond</option>
-                                                <option value="Comic Sans MS">Comic Sans MS</option>
-                                                <option value="Trebuchet MS">Trebuchet MS</option>
-                                                <option value="Impact">Impact</option>
-                                                <option value="Lucida Console">Lucida Console</option>
-                                                <option value="Tahoma">Tahoma</option>
-                                                <option value="Century Gothic">Century Gothic</option>
-                                                <option value="Brush Script MT">Brush Script MT</option>
-                                                <option value="Copperplate">Copperplate</option>
-                                                <option value="Papyrus">Papyrus</option>
-                                                <option value="Rockwell">Rockwell</option>
-                                                <option value="Consolas">Consolas</option>
-                                                <option value="Monaco">Monaco</option>
-                                            </select>
-                                        </div>
-
-                                        <div class="row mb-2">
-                                            <div class="col-6">
-                                                <label class="small">Size</label>
-                                                <input type="number" id="text_font_size" class="form-control" min="8" max="200" value="40"/>
-                                            </div>
-                                            <div class="col-6">
-                                                <label class="small">Color</label>
-                                                <input type="color" id="text_color" class="form-control" value="#000000"/>
-                                            </div>
-                                        </div>
-
-                                        <div class="btn-group w-100 mb-2" role="group">
-                                            <button id="text_bold" class="btn btn-outline-secondary btn-sm" title="Bold">
-                                                <i class="fa fa-bold"/>
+                                        <!-- Font Style Sub-Menu -->
+                                        <div class="text-submenu mb-3">
+                                            <button class="btn btn-outline-secondary w-100 text-submenu-toggle" data-submenu="font-style" style="text-align: left; display: flex; justify-content: space-between; align-items: center;">
+                                                <span><i class="fa fa-font" style="margin-right: 8px; width: 20px;"></i>Font Style</span>
+                                                <i class="fa fa-chevron-down"></i>
                                             </button>
-                                            <button id="text_italic" class="btn btn-outline-secondary btn-sm" title="Italic">
-                                                <i class="fa fa-italic"/>
-                                            </button>
-                                            <button id="text_underline" class="btn btn-outline-secondary btn-sm" title="Underline">
-                                                <i class="fa fa-underline"/>
-                                            </button>
-                                        </div>
+                                            <div class="text-submenu-content" id="font-style-content" style="display: none; margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                                                <div class="form-group mb-2">
+                                                    <label class="small">Font Family</label>
+                                                    <select id="text_font_family" class="form-control">
+                                                        <option value="Arial">Arial</option>
+                                                        <option value="Helvetica">Helvetica</option>
+                                                        <option value="Times New Roman">Times New Roman</option>
+                                                        <option value="Courier New">Courier New</option>
+                                                        <option value="Verdana">Verdana</option>
+                                                        <option value="Georgia">Georgia</option>
+                                                        <option value="Palatino">Palatino</option>
+                                                        <option value="Garamond">Garamond</option>
+                                                        <option value="Comic Sans MS">Comic Sans MS</option>
+                                                        <option value="Trebuchet MS">Trebuchet MS</option>
+                                                        <option value="Impact">Impact</option>
+                                                        <option value="Lucida Console">Lucida Console</option>
+                                                        <option value="Tahoma">Tahoma</option>
+                                                        <option value="Century Gothic">Century Gothic</option>
+                                                        <option value="Brush Script MT">Brush Script MT</option>
+                                                        <option value="Copperplate">Copperplate</option>
+                                                        <option value="Papyrus">Papyrus</option>
+                                                        <option value="Rockwell">Rockwell</option>
+                                                        <option value="Consolas">Consolas</option>
+                                                        <option value="Monaco">Monaco</option>
+                                                    </select>
+                                                </div>
 
-                                        <!-- Preset Colors -->
-                                        <div class="mb-2">
-                                            <label class="small">Quick Colors</label>
-                                            <div class="d-flex flex-wrap">
-                                                <div class="preset-color" data-color="#000000" style="width: 30px; height: 30px; background: #000000; cursor: pointer; margin: 2px; border-radius: 4px;" title="Black"></div>
-                                                <div class="preset-color" data-color="#FFFFFF" style="width: 30px; height: 30px; background: #FFFFFF; cursor: pointer; margin: 2px; border: 1px solid #ddd; border-radius: 4px;" title="White"></div>
-                                                <div class="preset-color" data-color="#FF0000" style="width: 30px; height: 30px; background: #FF0000; cursor: pointer; margin: 2px; border-radius: 4px;" title="Red"></div>
-                                                <div class="preset-color" data-color="#00FF00" style="width: 30px; height: 30px; background: #00FF00; cursor: pointer; margin: 2px; border-radius: 4px;" title="Green"></div>
-                                                <div class="preset-color" data-color="#0000FF" style="width: 30px; height: 30px; background: #0000FF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Blue"></div>
-                                                <div class="preset-color" data-color="#FFFF00" style="width: 30px; height: 30px; background: #FFFF00; cursor: pointer; margin: 2px; border-radius: 4px;" title="Yellow"></div>
-                                                <div class="preset-color" data-color="#FF00FF" style="width: 30px; height: 30px; background: #FF00FF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Magenta"></div>
-                                                <div class="preset-color" data-color="#00FFFF" style="width: 30px; height: 30px; background: #00FFFF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Cyan"></div>
-                                                <div class="preset-color" data-color="#FFA500" style="width: 30px; height: 30px; background: #FFA500; cursor: pointer; margin: 2px; border-radius: 4px;" title="Orange"></div>
-                                                <div class="preset-color" data-color="#800080" style="width: 30px; height: 30px; background: #800080; cursor: pointer; margin: 2px; border-radius: 4px;" title="Purple"></div>
-                                                <div class="preset-color" data-color="#FFC0CB" style="width: 30px; height: 30px; background: #FFC0CB; cursor: pointer; margin: 2px; border-radius: 4px;" title="Pink"></div>
-                                                <div class="preset-color" data-color="#A52A2A" style="width: 30px; height: 30px; background: #A52A2A; cursor: pointer; margin: 2px; border-radius: 4px;" title="Brown"></div>
+                                                <div class="row mb-2">
+                                                    <div class="col-12">
+                                                        <label class="small">Size</label>
+                                                        <input type="number" id="text_font_size" class="form-control" min="8" max="200" value="40"/>
+                                                    </div>
+                                                </div>
+
+                                                <div class="btn-group w-100 mb-2" role="group">
+                                                    <button id="text_bold" class="btn btn-outline-secondary btn-sm" title="Bold">
+                                                        <i class="fa fa-bold"/>
+                                                    </button>
+                                                    <button id="text_italic" class="btn btn-outline-secondary btn-sm" title="Italic">
+                                                        <i class="fa fa-italic"/>
+                                                    </button>
+                                                    <button id="text_underline" class="btn btn-outline-secondary btn-sm" title="Underline">
+                                                        <i class="fa fa-underline"/>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
+
+                                        <!-- Color Sub-Menu -->
+                                        <div class="text-submenu mb-3">
+                                            <button class="btn btn-outline-secondary w-100 text-submenu-toggle" data-submenu="color" style="text-align: left; display: flex; justify-content: space-between; align-items: center;">
+                                                <span><i class="fa fa-palette" style="margin-right: 8px; width: 20px;"></i>Color</span>
+                                                <i class="fa fa-chevron-down"></i>
+                                            </button>
+                                            <div class="text-submenu-content" id="color-content" style="display: none; margin-top: 8px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                                                <div class="form-group mb-2">
+                                                    <label class="small">Text Color</label>
+                                                    <input type="color" id="text_color" class="form-control" value="#000000" style="height: 40px;"/>
+                                                </div>
+                                                <label class="small">Quick Colors</label>
+                                                <div class="d-flex flex-wrap">
+                                                    <div class="preset-color" data-color="#000000" style="width: 30px; height: 30px; background: #000000; cursor: pointer; margin: 2px; border-radius: 4px;" title="Black"></div>
+                                                    <div class="preset-color" data-color="#FFFFFF" style="width: 30px; height: 30px; background: #FFFFFF; cursor: pointer; margin: 2px; border: 1px solid #ddd; border-radius: 4px;" title="White"></div>
+                                                    <div class="preset-color" data-color="#FF0000" style="width: 30px; height: 30px; background: #FF0000; cursor: pointer; margin: 2px; border-radius: 4px;" title="Red"></div>
+                                                    <div class="preset-color" data-color="#00FF00" style="width: 30px; height: 30px; background: #00FF00; cursor: pointer; margin: 2px; border-radius: 4px;" title="Green"></div>
+                                                    <div class="preset-color" data-color="#0000FF" style="width: 30px; height: 30px; background: #0000FF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Blue"></div>
+                                                    <div class="preset-color" data-color="#FFFF00" style="width: 30px; height: 30px; background: #FFFF00; cursor: pointer; margin: 2px; border-radius: 4px;" title="Yellow"></div>
+                                                    <div class="preset-color" data-color="#FF00FF" style="width: 30px; height: 30px; background: #FF00FF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Magenta"></div>
+                                                    <div class="preset-color" data-color="#00FFFF" style="width: 30px; height: 30px; background: #00FFFF; cursor: pointer; margin: 2px; border-radius: 4px;" title="Cyan"></div>
+                                                    <div class="preset-color" data-color="#FFA500" style="width: 30px; height: 30px; background: #FFA500; cursor: pointer; margin: 2px; border-radius: 4px;" title="Orange"></div>
+                                                    <div class="preset-color" data-color="#800080" style="width: 30px; height: 30px; background: #800080; cursor: pointer; margin: 2px; border-radius: 4px;" title="Purple"></div>
+                                                    <div class="preset-color" data-color="#FFC0CB" style="width: 30px; height: 30px; background: #FFC0CB; cursor: pointer; margin: 2px; border-radius: 4px;" title="Pink"></div>
+                                                    <div class="preset-color" data-color="#A52A2A" style="width: 30px; height: 30px; background: #A52A2A; cursor: pointer; margin: 2px; border-radius: 4px;" title="Brown"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+
+
+
                                     </div>
                                 </div>
 
@@ -211,23 +234,9 @@
                                 <!-- Shape Panel -->
                                 <div id="shape_panel" class="menu-panel" style="display: none; margin-top: 10px;">
                                     <h5 class="mb-3">Add Shape</h5>
-                                    <div class="form-group mb-2">
-                                        <select id="personalization_shape" class="form-control mb-2">
-                                            <option value="rect">Rectangle</option>
-                                            <option value="square">Square</option>
-                                            <option value="circle">Circle</option>
-                                            <option value="ellipse">Ellipse</option>
-                                            <option value="triangle">Triangle</option>
-                                            <option value="polygon">Pentagon</option>
-                                            <option value="hexagon">Hexagon</option>
-                                            <option value="star">Star</option>
-                                            <option value="heart">Heart</option>
-                                            <option value="diamond">Diamond</option>
-                                            <option value="arrow">Arrow</option>
-                                            <option value="line">Line</option>
-                                        </select>
+                                    <div id="shapes_grid" class="row g-2" style="margin-bottom: 15px;">
+                                        <!-- Populated by JS with shape icons in 2 columns -->
                                     </div>
-                                    <button id="add_shape_button" class="btn btn-primary w-100 mb-3"><i class="fa fa-plus"/> Add Shape</button>
 
                                     <div id="shape_controls" style="display: none;">
                                         <div class="form-group mb-2">
@@ -262,9 +271,10 @@
                                 <!-- Layers Panel (NEW) -->
                                 <div id="layers_panel" class="menu-panel" style="display: none; margin-top: 10px;">
                                     <h5 class="mb-3">Layers</h5>
-                                    <div id="layers_list" style="max-height:420px; overflow:auto; margin-top:10px;">
+                                    <div id="layers_list" style="margin-top:10px;">
                                         <!-- Populated by JS -->
                                     </div>
+                                </div>
                                 </div>
                             </div>
                         </div>

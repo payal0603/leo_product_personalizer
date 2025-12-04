@@ -56,6 +56,6 @@ class SaleOrderLine(models.Model):
             "name": "Personalizations",
             "type": "ir.actions.act_window",
             "res_model": "sale.order.line.personalization",
-            "view_mode": "list,form,kanban",
+            "view_mode": "kanban,list,form",
             "domain": [("sale_order_line_id", "=", self.id)],
         }

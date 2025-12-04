@@ -21,7 +21,6 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
     events: {
         'click #add_text_button': '_onClickAddText',
         'click #add_image_button': '_onClickAddImage',
-        'click #add_shape_button': '_onClickAddShape',
         'click #add_to_cart_personalized': '_onClickAddToCartPersonalized',
         'click #undo_button': '_onClickUndo',
         'click #redo_button': '_onClickRedo',
@@ -37,8 +36,10 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         'click .preset-color': '_onClickPresetColor',
         'change #design_type_selector': '_onDesignTypeChange',
         'change #product_qty': '_onChangeQty',
-        'change #variant_selector': '_onVariantChange',
+        'click .variant-item': '_onVariantChange',
+        'click .shape-item': '_onShapeSelect',
         'click .menu-item': '_onMenuItemClick',
+        'click .text-submenu-toggle': '_onToggleTextSubmenu',
         // Preview & Download
         'click #preview_designs_button': '_onClickPreviewDesigns',
         'click #download_designs_button': '_onClickDownloadDesigns',
@@ -208,6 +209,10 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         self.fabricCanvas.on('object:scaling', function (e) {
             if (e.target && e.target.isZoneRect !== true && e.target !== self.zoneRect) {
                 self._clampObjectToZone(e.target);
+                // Update font size on scaling for text objects
+                if (e.target.type === 'i-text' || e.target.type === 'text' || e.target.type === 'curved-text') {
+                    self._updateFontSizeOnScale(e.target);
+                }
             }
         });
 
@@ -337,7 +342,7 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
             return;
         }
 
-        const newVariantId = parseInt(ev.target.value);
+        const newVariantId = parseInt($(ev.currentTarget).data('variant-id'));
         if (!newVariantId || newVariantId === self.activeVariantId) return;
 
         // Save current variant's design before switching
@@ -361,6 +366,9 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                 return;
             }
             self.productData = data;
+
+            // Update variant grid UI
+            self._renderVariantGrid();
 
             // Re-initialize design type selector
             const $selector = self.$('#design_type_selector');
@@ -400,6 +408,11 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
 
         // Show selected panel
         this.$('#' + menuType + '_panel').show();
+
+        // Reset controls visibility
+        this.$('#text_controls, #shape_controls, #layer_controls').hide();
+        this.$('#personalization_text, #add_text_button').show();
+        this.$('#shapes_grid').show();
     },
 
     _saveState: function () {
@@ -424,6 +437,25 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         }
     },
 
+    _updateFontSizeOnScale: function (obj) {
+        const scale = Math.max(obj.scaleX, obj.scaleY);
+        const newFontSize = (obj.fontSize || 20) * scale;
+
+        // Apply the new font size and reset scale
+        obj.set({
+            fontSize: newFontSize,
+            scaleX: 1,
+            scaleY: 1
+        });
+
+        // Update the font size input field in the UI
+        this.$('#text_font_size').val(Math.round(newFontSize));
+
+        // For curved text, diameter also needs to be scaled
+        if (obj.type === 'curved-text') {
+            obj.set('diameter', (obj.diameter || 250) * scale);
+        }
+    },
     _updateHistoryButtons: function () {
         this.$('#undo_button').prop('disabled', this.historyStep <= 0);
         this.$('#redo_button').prop('disabled', this.historyStep >= this.history.length - 1);
@@ -455,6 +487,12 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
             }
             if (currentZone) {
                 self._setZone(currentZone);
+
+                self.fabricCanvas.getObjects().forEach(function (obj) {
+                    if (obj !== self.zoneRect && !obj.isZoneRect) {
+                        self._clampObjectToZone(obj);
+                    }
+                });
             }
             self.fabricCanvas.renderAll();
             self.isUndoRedoAction = false;
@@ -479,9 +517,13 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
 
         const isText = obj.type === 'i-text' || obj.type === 'text';
         const isImage = obj.type === 'image';
+        const isShape = !isText && !isImage;
+
+        // Auto-switch left sidebar panel based on selected object type
+        this._switchPanelForObjectType(isText, isImage, isShape);
 
         this.$('#text_controls').toggle(isText);
-        this.$('#shape_controls').toggle(!isText && !isImage);
+        this.$('#shape_controls').toggle(isShape);
         this.$('#layer_controls').show();
 
         if (isText) {
@@ -491,16 +533,48 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
             this.$('#text_bold').toggleClass('active', obj.fontWeight === 'bold');
             this.$('#text_italic').toggleClass('active', obj.fontStyle === 'italic');
             this.$('#text_underline').toggleClass('active', obj.underline);
-        } else if (!isImage) {
+        } else if (isShape) {
             this.$('#shape_fill_color').val(this._toHex(obj.fill));
             this.$('#shape_stroke_color').val(this._toHex(obj.stroke));
             this.$('#shape_stroke_width').val(obj.strokeWidth || 2);
         }
+        // For images, no specific controls to update
+    },
 
+    _switchPanelForObjectType: function (isText, isImage, isShape) {
+        // Hide all panels
+        this.$('.menu-panel').hide();
+        this.$('.menu-item').removeClass('active');
+
+        if (isText) {
+            // Show text panel and activate text menu item
+            this.$('#text_panel').show();
+            this.$('.menu-item[data-menu="text"]').addClass('active');
+
+            // Hide add text controls, show edit controls
+            this.$('#personalization_text, #add_text_button').hide();
+            this.$('#text_controls').show();
+        } else if (isImage) {
+            // Show image panel and activate image menu item
+            this.$('#image_panel').show();
+            this.$('.menu-item[data-menu="image"]').addClass('active');
+        } else if (isShape) {
+            // Show shape panel and activate shape menu item
+            this.$('#shape_panel').show();
+            this.$('.menu-item[data-menu="shape"]').addClass('active');
+
+            // Hide shapes grid, show edit controls
+            this.$('#shapes_grid').hide();
+            this.$('#shape_controls').show();
+        }
     },
 
     _hideControls: function () {
         this.$('#text_controls, #shape_controls, #layer_controls').hide();
+
+        // Restore add controls visibility
+        this.$('#personalization_text, #add_text_button').show();
+        this.$('#shapes_grid').show();
     },
 
     _toHex: function (color) {
@@ -525,37 +599,32 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
             return;
         }
 
+        let initialLeft = 100;
+        let initialTop = 100;
+
+        if (self.zone) {
+            initialLeft = self.zone.bound_x + (self.zone.width / 2);
+            initialTop = self.zone.bound_y + (self.zone.height / 2);
+        }
+
         const textObj = new fabric.IText(text, {
-            left: 100,
-            top: 100,
+            left: initialLeft,
+            top: initialTop,
             fontFamily: 'Arial',
             fill: '#000000',
             fontSize: 40
         });
 
         self.fabricCanvas.add(textObj);
-        // store a human-friendly label for layers list
+
+        if (self.zone) {
+            self._clampObjectToZone(textObj);
+        }
+
         try { textObj.__label = text; } catch (e) { }
         self.fabricCanvas.setActiveObject(textObj);
         self.fabricCanvas.renderAll();
         self.$('#personalization_text').val('');
-    },
-
-    _onChangeTextProperty: function (ev) {
-        const obj = this.fabricCanvas.getActiveObject();
-        if (!obj || (obj.type !== 'i-text' && obj.type !== 'text')) return;
-
-        const propMap = {
-            'text_font_family': ['fontFamily', ev.target.value],
-            'text_font_size': ['fontSize', parseInt(ev.target.value)],
-            'text_color': ['fill', ev.target.value]
-        };
-
-        const prop = propMap[ev.target.id];
-        if (prop) {
-            obj.set(prop[0], prop[1]);
-            this.fabricCanvas.renderAll();
-        }
     },
 
     _onClickTextStyle: function (ev) {
@@ -576,6 +645,43 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         }
     },
 
+    _onToggleTextSubmenu: function (ev) {
+        const $button = $(ev.currentTarget);
+        const $content = $button.closest('.text-submenu').find('.text-submenu-content');
+        const isOpen = $content.is(':visible');
+        
+        // Close all other submenus
+        this.$('.text-submenu-content').slideUp(200);
+        this.$('.text-submenu-toggle').removeClass('active');
+        
+        // Toggle current submenu
+        if (!isOpen) {
+            $content.slideDown(200);
+            $button.addClass('active');
+        }
+    },
+
+    _onChangeTextProperty: function (ev) {
+        const obj = this.fabricCanvas.getActiveObject();
+        if (!obj || (obj.type !== 'i-text' && obj.type !== 'text')) return;
+
+        const propMap = {
+            'text_font_family': ['fontFamily', ev.target.value],
+            'text_font_size': ['fontSize', parseInt(ev.target.value)],
+            'text_color': ['fill', ev.target.value]
+        };
+
+        const prop = propMap[ev.target.id];
+        if (prop) {
+            obj.set(prop[0], prop[1]);
+            this.fabricCanvas.renderAll();
+        }
+    },
+
+
+
+
+
     _onClickAddImage: function () {
         const self = this;
         if (!self.fabricCanvas) {
@@ -595,9 +701,20 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                 fabric.Image.fromURL(e.target.result, function (img) {
                     if (!img) return;
                     img.scaleToWidth(150);
+
+                    // Calculate initial position
+                    let initialLeft = 100 + i * 20;
+                    let initialTop = 100 + i * 20;
+
+                    if (self.zone) {
+                        // Position image in center of zone area
+                        initialLeft = self.zone.bound_x + (self.zone.width / 2) + (i * 10);
+                        initialTop = self.zone.bound_y + (self.zone.height / 2) + (i * 10);
+                    }
+
                     img.set({
-                        left: 100 + i * 20,
-                        top: 100 + i * 20
+                        left: initialLeft,
+                        top: initialTop
                     });
                     // attach filename as label (used in layers list)
                     try {
@@ -605,6 +722,11 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                     } catch (err) { }
                     try { img.__label = file.name; } catch (err) { }
                     self.fabricCanvas.add(img);
+
+                    if (self.zone) {
+                        self._clampObjectToZone(img);
+                    }
+
                     self.fabricCanvas.setActiveObject(img);
                     self.fabricCanvas.renderAll();
                 });
@@ -615,28 +737,202 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         self.$('#personalization_image_upload').val('');
     },
 
-    _onClickAddShape: function () {
+    _onChangeShapeProperty: function (ev) {
+        const obj = this.fabricCanvas.getActiveObject();
+        if (!obj || obj.type === 'i-text' || obj.type === 'text' || obj.type === 'image') return;
+
+        const propMap = {
+            'shape_fill_color': ['fill', ev.target.value],
+            'shape_stroke_color': ['stroke', ev.target.value],
+            'shape_stroke_width': ['strokeWidth', parseInt(ev.target.value)]
+        };
+
+        const prop = propMap[ev.target.id];
+        if (prop) {
+            obj.set(prop[0], prop[1]);
+            this.fabricCanvas.renderAll();
+        }
+    },
+
+    _onClickPresetColor: function (ev) {
+        const color = $(ev.currentTarget).data('color');
+        const obj = this.fabricCanvas.getActiveObject();
+        if (!obj || obj === this.zoneRect) return;
+
+        if (obj.type === 'i-text' || obj.type === 'text') {
+            obj.set('fill', color);
+            this.$('#text_color').val(color);
+        } else if (obj.type !== 'image') {
+            obj.set('fill', color);
+            this.$('#shape_fill_color').val(color);
+        }
+
+        this.fabricCanvas.renderAll();
+    },
+
+    _initDesignTypeSelector: function () {
+        const self = this;
+
+        if (self.productData.variants && self.productData.variants.length > 0) {
+            self._renderVariantGrid();
+
+            // Disable variant menu in edit mode
+            if (self.editMode) {
+                self.$('.menu-item[data-menu="variant"]').css({
+                    'opacity': '0.5',
+                    'pointer-events': 'none',
+                    'cursor': 'not-allowed'
+                });
+            }
+        }
+
+        self._renderShapesGrid();
+        // Initialize design type selector
+        const $selector = self.$('#design_type_selector');
+        const types = self.productData.design_types || [];
+
+        $selector.empty();
+        types.forEach(function (t) {
+            const label = t.replace(/_/g, ' ').replace(/\b\w/g, function (c) {
+                return c.toUpperCase();
+            });
+            $selector.append('<option value="' + t + '">' + label + '</option>');
+        });
+
+        const defaultType = self.productData.default_design_type || types[0];
+        self.activeDesignType = defaultType;
+        $selector.val(defaultType);
+
+        self._loadDesignType(defaultType);
+    },
+
+    _renderVariantGrid: function () {
+        const self = this;
+        const $grid = self.$('#variants_grid');
+        $grid.empty();
+
+        if (!self.productData.variants) return;
+
+        self.productData.variants.forEach(function (variant) {
+            const isActive = variant.id === self.activeVariantId;
+            const activeClass = isActive ? 'active' : '';
+            const imageUrl = variant.image_url || '';
+
+            const $item = $('<div>')
+                .addClass('col-6 variant-item p-2 ' + activeClass)
+                .attr('data-variant-id', variant.id);
+
+            if (imageUrl) {
+                const $imageWrapper = $('<div class="variant-image-wrapper"></div>');
+                const $img = $('<img>')
+                    .addClass('img-fluid')
+                    .attr('src', imageUrl)
+                    .attr('alt', variant.name);
+                $imageWrapper.append($img);
+                $item.append($imageWrapper);
+            }
+
+            // $item.append(
+            //     $('<div>')
+            //         .addClass('variant-item-name')
+            //         .text(variant.name)
+            // );
+
+            $grid.append($item);
+        });
+    },
+
+    _getShapesData: function () {
+        return [
+            { id: 'rect', name: 'Rectangle', icon: 'fa-square', faClass: 'fa fa-square' },
+            { id: 'circle', name: 'Circle', icon: 'fa-circle', faClass: 'fa fa-circle' },
+            { id: 'triangle', name: 'Triangle', icon: 'fa-play', faClass: 'fa fa-play' },
+            { id: 'star', name: 'Star', icon: 'fa-star', faClass: 'fa fa-star' },
+            { id: 'heart', name: 'Heart', icon: 'fa-heart', faClass: 'fa fa-heart' },
+            { id: 'diamond', name: 'Diamond', icon: 'fa-diamond', faClass: 'fa fa-diamond' },
+            { id: 'ellipse', name: 'Ellipse', icon: 'fa-ellipsis-h', faClass: 'fa fa-ellipsis-h' },
+            { id: 'polygon', name: 'Pentagon', icon: 'fa-certificate', faClass: 'fa fa-certificate' },
+            { id: 'hexagon', name: 'Hexagon', icon: 'fa-circle', faClass: 'fa fa-circle' },
+            { id: 'arrow', name: 'Arrow', icon: 'fa-arrow-right', faClass: 'fa fa-arrow-right' },
+            { id: 'square', name: 'Square', icon: 'fa-square', faClass: 'fa fa-square' },
+            { id: 'line', name: 'Line', icon: 'fa-minus', faClass: 'fa fa-minus' },
+        ];
+    },
+
+    _renderShapesGrid: function () {
+        const self = this;
+        const $grid = self.$('#shapes_grid');
+        $grid.empty();
+
+        const shapes = self._getShapesData();
+        shapes.forEach(function (shape) {
+            const $item = $('<div>')
+                .addClass('col-6 shape-item')
+                .attr('data-shape-id', shape.id);
+
+            $item.append(
+                $('<div>')
+                    .addClass('shape-item-icon')
+                    .html('<i class="' + shape.faClass + '"></i>')
+            );
+
+            $item.append(
+                $('<div>')
+                    .addClass('shape-item-name')
+                    .text(shape.name)
+            );
+
+            $grid.append($item);
+        });
+    },
+
+    _onShapeSelect: function (ev) {
+        const self = this;
+        const shapeId = $(ev.currentTarget).data('shape-id');
+
+        // Update active state
+        self.$('.shape-item').removeClass('active');
+        $(ev.currentTarget).addClass('active');
+
+        // Store selected shape
+        self.selectedShapeId = shapeId;
+
+        // Trigger shape addition
+        self._addShapeToCanvas(shapeId);
+    },
+
+    _addShapeToCanvas: function (shapeType) {
         const self = this;
         if (!self.fabricCanvas) {
             alert('Canvas not ready');
             return;
         }
 
+        // Calculate initial position
+        let initialLeft = 100;
+        let initialTop = 100;
+
+        if (self.zone) {
+            // Position shape in center of zone area
+            initialLeft = self.zone.bound_x + (self.zone.width / 2);
+            initialTop = self.zone.bound_y + (self.zone.height / 2);
+        }
+
         const props = {
-            left: 100,
-            top: 100,
+            left: initialLeft,
+            top: initialTop,
             fill: '#3b82f6',
             stroke: '#1e40af',
             strokeWidth: 2
         };
 
-        const $shapeSelect = self.$('#personalization_shape');
-        const shapeType = $shapeSelect.val();
-        const shapeLabel = $shapeSelect.find('option:selected').text() || shapeType;
         let shape = null;
+        const shapeName = self._getShapeNameById(shapeType);
 
         switch (shapeType) {
             case 'rect':
+                shape = new fabric.Rect({ ...props, width: 100, height: 70 });
+                break;
             case 'square':
                 shape = new fabric.Rect({ ...props, width: 100, height: 100 });
                 break;
@@ -700,92 +996,23 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         }
 
         if (shape) {
-            // attach a readable label for the layers list (from dropdown)
-            try { shape.__label = shapeLabel; } catch (e) { }
+            try { shape.__label = shapeName; } catch (e) { }
             self.fabricCanvas.add(shape);
+
+            // Clamp to zone if zone exists
+            if (self.zone) {
+                self._clampObjectToZone(shape);
+            }
+
             self.fabricCanvas.setActiveObject(shape);
             self.fabricCanvas.renderAll();
         }
     },
 
-    _onChangeShapeProperty: function (ev) {
-        const obj = this.fabricCanvas.getActiveObject();
-        if (!obj || obj.type === 'i-text' || obj.type === 'text' || obj.type === 'image') return;
-
-        const propMap = {
-            'shape_fill_color': ['fill', ev.target.value],
-            'shape_stroke_color': ['stroke', ev.target.value],
-            'shape_stroke_width': ['strokeWidth', parseInt(ev.target.value)]
-        };
-
-        const prop = propMap[ev.target.id];
-        if (prop) {
-            obj.set(prop[0], prop[1]);
-            this.fabricCanvas.renderAll();
-        }
-    },
-
-    _onClickPresetColor: function (ev) {
-        const color = $(ev.currentTarget).data('color');
-        const obj = this.fabricCanvas.getActiveObject();
-        if (!obj || obj === this.zoneRect) return;
-
-        if (obj.type === 'i-text' || obj.type === 'text') {
-            obj.set('fill', color);
-            this.$('#text_color').val(color);
-        } else if (obj.type !== 'image') {
-            obj.set('fill', color);
-            this.$('#shape_fill_color').val(color);
-        }
-
-        this.fabricCanvas.renderAll();
-    },
-
-    _initDesignTypeSelector: function () {
-        const self = this;
-
-        if (self.productData.variants && self.productData.variants.length > 0) {
-            const $variantSelector = self.$('#variant_selector');
-            $variantSelector.empty();
-
-            self.productData.variants.forEach(function (v) {
-                $variantSelector.append('<option value="' + v.id + '">' + v.name + '</option>');
-            });
-
-            // In edit mode, set the current variant
-            if (self.editMode && self.editVariantId) {
-                $variantSelector.val(self.editVariantId);
-            } else {
-                $variantSelector.val(self.activeVariantId);
-            }
-
-            // Disable variant menu in edit mode
-            if (self.editMode) {
-                self.$('.menu-item[data-menu="variant"]').css({
-                    'opacity': '0.5',
-                    'pointer-events': 'none',
-                    'cursor': 'not-allowed'
-                });
-            }
-        }
-
-        // Initialize design type selector
-        const $selector = self.$('#design_type_selector');
-        const types = self.productData.design_types || [];
-
-        $selector.empty();
-        types.forEach(function (t) {
-            const label = t.replace(/_/g, ' ').replace(/\b\w/g, function (c) {
-                return c.toUpperCase();
-            });
-            $selector.append('<option value="' + t + '">' + label + '</option>');
-        });
-
-        const defaultType = self.productData.default_design_type || types[0];
-        self.activeDesignType = defaultType;
-        $selector.val(defaultType);
-
-        self._loadDesignType(defaultType);
+    _getShapeNameById: function (shapeId) {
+        const shapes = this._getShapesData();
+        const shape = shapes.find(s => s.id === shapeId);
+        return shape ? shape.name : shapeId;
     },
 
     _onDesignTypeChange: function (ev) {
@@ -1167,6 +1394,8 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
         // Process each design type separately
         for (const dt of allDesignTypes) {
             let canvasJSON, previewURL;
+            const designConfig = self.productData.designs[dt];
+            const backgroundUrl = designConfig ? designConfig.image_url : self.productData.fallback_image_url;
 
             if (self.designData[dt] && self.designData[dt].json && self.designData[dt].json.objects && self.designData[dt].json.objects.length > 0) {
                 // User customized - save their work
@@ -1174,14 +1403,14 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                 previewURL = await self._generatePreviewForDesignType(dt);
             } else {
                 // Not customized - save empty objects with original image
-                const designConfig = self.productData.designs[dt];
-                previewURL = designConfig ? designConfig.image_url : self.productData.fallback_image_url;
+                previewURL = backgroundUrl;
                 canvasJSON = { version: "5.3.0", objects: [] };
             }
 
             designs[dt] = {
                 json: JSON.stringify(canvasJSON),
                 preview: previewURL,
+                background_url: backgroundUrl,
             };
         }
 
@@ -1239,13 +1468,19 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
             const bgUrl = designConfig ? designConfig.image_url : self.productData.fallback_image_url;
 
             return new Promise(function (resolve) {
-                function loadObjects() {
-                    fabric.util.enlivenObjects(savedData.json.objects || [], function (enlivenedObjects) {
-                        enlivenedObjects.forEach(function (obj) {
-                            tempCanvas.add(obj);
-                        });
+                let jsonToLoad = savedData.json;
+                if (typeof jsonToLoad === 'string') {
+                    try {
+                        jsonToLoad = JSON.parse(jsonToLoad);
+                    } catch (e) {
+                        console.error('Error parsing JSON for preview:', e);
+                        jsonToLoad = { objects: [] };
+                    }
+                }
 
-                        tempCanvas.renderAll();
+                function loadObjects() {
+                    tempCanvas.loadFromJSON(jsonToLoad, function() {
+                        tempCanvas.renderAll(); // Render after loading
                         const dataURL = tempCanvas.toDataURL({ format: 'png', quality: 0.8 });
                         tempCanvas.dispose();
                         resolve(dataURL);
@@ -1255,13 +1490,13 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
                 if (bgUrl) {
                     fabric.Image.fromURL(bgUrl, function (img) {
                         if (img) {
-                            const w = tempCanvas.getWidth();
-                            const h = tempCanvas.getHeight();
-                            const scale = Math.min(w / img.width, h / img.height);
+                            const canvasWidth = tempCanvas.getWidth();
+                            const canvasHeight = tempCanvas.getHeight();
+                            const scale = Math.min(canvasWidth / img.width, canvasHeight / img.height);
 
                             img.set({
-                                left: (w - img.width * scale) / 2,
-                                top: (h - img.height * scale) / 2,
+                                left: (canvasWidth - img.width * scale) / 2,
+                                top: (canvasHeight - img.height * scale) / 2,
                                 scaleX: scale,
                                 scaleY: scale,
                                 selectable: false,
@@ -1270,6 +1505,7 @@ publicWidget.registry.ProductPersonalizationEditor = publicWidget.Widget.extend(
 
                             tempCanvas.setBackgroundImage(img, loadObjects);
                         } else {
+                            console.warn('Could not load background for preview from URL:', bgUrl);
                             loadObjects();
                         }
                     }, null, { crossOrigin: 'anonymous' });

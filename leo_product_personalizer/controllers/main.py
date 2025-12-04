@@ -130,26 +130,34 @@ class ProductPersonalizerController(http.Controller):
 
             personalized_json = d_data.get("json") if isinstance(d_data, dict) else None
             preview_dataurl = d_data.get("preview") if isinstance(d_data, dict) else None
+            background_url = d_data.get("background_url") if isinstance(d_data, dict) else None
 
-            # Convert base64 preview or use config image
+            # Convert base64 preview to binary
             preview_bin = False
-            if preview_dataurl:
-                if "data:" in str(preview_dataurl):
-                    # Custom preview from canvas
-                    try:
-                        preview_bin = preview_dataurl.split(",", 1)[1]
-                    except Exception:
-                        pass
-                
+            if preview_dataurl and "data:image" in str(preview_dataurl):
+                # It's a data URL from canvas, extract base64 part
+                try:
+                    preview_bin = preview_dataurl.split(",", 1)[1].encode("utf-8")
+                except Exception as e:
+                    _logger.warning("Could not decode preview dataURL for design type %s: %s", d_type, e)
             # Fallback to config image if no custom preview
             if not preview_bin and config.design_image:
                 preview_bin = config.design_image
+
+            # Store background URL in personalized JSON if available
+            if personalized_json and isinstance(personalized_json, str):
+                try:
+                    json_data = json.loads(personalized_json)
+                    json_data["background_url"] = background_url
+                    personalized_json = json.dumps(json_data)
+                except Exception as e:
+                    _logger.warning("Failed to add background_url to JSON: %s", e)
 
             vals = {
                 "sale_order_line_id": line.id,
                 "design_type": d_type,
                 "design_config_id": config.id,
-                "personalized_json": personalized_json or json.dumps({"version": "5.3.0", "objects": []}),
+                "personalized_json": personalized_json or json.dumps({"version": "5.3.0", "objects": [], "background_url": background_url}),
                 "product_image": preview_bin,
             }
 
@@ -300,10 +308,13 @@ class ProductPersonalizerController(http.Controller):
                 if "objects" not in personalized_json:
                     personalized_json["objects"] = []
 
+                # Extract background URL if it was stored
+                background_url = personalized_json.get("background_url", None)
 
                 designs[design_type] = {
                     "personalized_json": personalized_json,
                     "json": personalized_json,
+                    "background_url": background_url,
                     "is_customized": len(personalized_json.get("objects", [])) > 0,
                 }
                 
@@ -314,6 +325,7 @@ class ProductPersonalizerController(http.Controller):
                 designs[design_type] = {
                     "personalized_json": {"version": "5.3.0", "objects": []},
                     "json": {"version": "5.3.0", "objects": []},
+                    "background_url": None,
                     "is_customized": False,
                 }
 
